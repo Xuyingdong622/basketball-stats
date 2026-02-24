@@ -275,7 +275,7 @@ elif menu == "📊 球员数据榜":
         "3v3半场抢分21": "3v3"
     }
     
-    # 基础查询（不关联比赛表，确保能看到数据）
+    # 基础查询（所有比赛汇总）
     st.subheader("📊 基础统计数据")
     
     base_query = """
@@ -291,7 +291,11 @@ elif menu == "📊 球员数据榜":
             SUM(steals) as total_steals,
             ROUND(AVG(steals), 1) as avg_steals,
             SUM(blocks) as total_blocks,
-            ROUND(AVG(blocks), 1) as avg_blocks
+            ROUND(AVG(blocks), 1) as avg_blocks,
+            SUM(turnovers) as total_turnovers,
+            ROUND(AVG(turnovers), 1) as avg_turnovers,
+            SUM(fouls) as total_fouls,
+            ROUND(AVG(fouls), 1) as avg_fouls
         FROM player_stats ps
         JOIN players p ON ps.player_id = p.player_id
         GROUP BY p.player_id
@@ -315,7 +319,11 @@ elif menu == "📊 球员数据榜":
                 'total_steals': '总抢断',
                 'avg_steals': '场均抢断',
                 'total_blocks': '总盖帽',
-                'avg_blocks': '场均盖帽'
+                'avg_blocks': '场均盖帽',
+                'total_turnovers': '总失误',
+                'avg_turnovers': '场均失误',
+                'total_fouls': '总犯规',
+                'avg_fouls': '场均犯规'
             })
             st.dataframe(df_base_display, use_container_width=True)
             st.caption(f"📊 总计 {len(df_base)} 名球员")
@@ -346,7 +354,7 @@ elif menu == "📊 球员数据榜":
     if not df_base.empty:
         st.subheader("🏀 按比赛类型筛选")
         
-        # 构建带筛选的查询（使用英文列名，避免百分号）
+        # 构建带筛选的查询
         where_clause = ""
         if game_type_filter != "全部":
             game_type_code = game_type_map[game_type_filter]
@@ -361,6 +369,8 @@ elif menu == "📊 球员数据榜":
                 ROUND(AVG(ps.assists), 1) as avg_assists,
                 ROUND(AVG(ps.steals), 1) as avg_steals,
                 ROUND(AVG(ps.blocks), 1) as avg_blocks,
+                ROUND(AVG(ps.turnovers), 1) as avg_turnovers,
+                ROUND(AVG(ps.fouls), 1) as avg_fouls,
                 ROUND(SUM(ps.fg2_made)*100.0/SUM(ps.fg2_attempts), 1) as fg2_pct,
                 ROUND(SUM(ps.fg3_made)*100.0/SUM(ps.fg3_attempts), 1) as fg3_pct,
                 ROUND(SUM(ps.ft_made)*100.0/SUM(ps.ft_attempts), 1) as ft_pct
@@ -388,6 +398,8 @@ elif menu == "📊 球员数据榜":
                     'avg_assists': '场均助攻',
                     'avg_steals': '场均抢断',
                     'avg_blocks': '场均盖帽',
+                    'avg_turnovers': '场均失误',
+                    'avg_fouls': '场均犯规',
                     'fg2_pct': '两分%',
                     'fg3_pct': '三分%',
                     'ft_pct': '罚球%'
@@ -831,6 +843,7 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
 
 
