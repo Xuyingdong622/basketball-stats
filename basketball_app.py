@@ -258,38 +258,15 @@ if menu == "📝 数据录入":
                 except Exception as e:
                     st.error(f"❌ 保存失败：{e}")
 # ==================== 数据榜 ====================
-elif menu == "📊 数据榜":
+elif menu == "📊 球员数据榜":
     st.header("📊 球员数据榜")
     
-    # 刷新按钮和筛选
-    col1, col2, col3, col4 = st.columns([1, 2, 2, 2])
-    with col1:
-        if st.button("🔄 刷新数据"):
-            st.rerun()
-    
-    with col2:
-        game_type_filter = st.selectbox(
-            "🏀 比赛类型",
-            ["全部", "5v5全场", "4v4半场抢分21", "3v3半场抢分21"],
-            index=0,
-            key="game_type_filter"
-        )
-    
-    with col3:
-        stat_type = st.selectbox(
-            "📊 统计类型",
-            ["综合数据", "投篮命中率", "防守数据", "胜率统计"],
-            index=0,
-            key="stat_type"
-        )
-    
-    with col4:
-        sort_by = st.selectbox(
-            "📈 排序方式",
-            ["得分", "篮板", "助攻", "抢断", "盖帽", "胜率"],
-            index=0,
-            key="sort_by"
-        )
+    # 比赛类型筛选
+    game_type_filter = st.selectbox(
+        "🏀 比赛类型",
+        ["全部", "5v5全场", "4v4半场抢分21", "3v3半场抢分21"],
+        index=0
+    )
     
     # 转换筛选条件
     game_type_map = {
@@ -298,113 +275,99 @@ elif menu == "📊 数据榜":
         "3v3半场抢分21": "3v3"
     }
     
-    where_clause = ""
-    if game_type_filter != "全部":
-        game_type_code = game_type_map[game_type_filter]
-        where_clause = f"AND m.game_type = '{game_type_code}'"
+    # 基础查询（不关联比赛表，先确保能看到数据）
+    st.subheader("📊 基础统计数据")
     
-    # 查询球员统计数据（包含胜率）
-    query = f"""
+    base_query = """
         SELECT 
-            p.player_id,
             p.player_name,
-            COUNT(DISTINCT ps.match_id) as games,
-            -- 胜率计算
-            SUM(CASE 
-                WHEN (ps.is_home = 1 AND m.home_win = 1) OR (ps.is_home = 0 AND m.away_win = 1) 
-                THEN 1 ELSE 0 END) as wins,
-            -- 基础数据
-            ROUND(AVG(ps.points), 1) as avg_points,
-            ROUND(AVG(ps.rebounds), 1) as avg_rebounds,
-            ROUND(AVG(ps.assists), 1) as avg_assists,
-            ROUND(AVG(ps.steals), 1) as avg_steals,
-            ROUND(AVG(ps.blocks), 1) as avg_blocks,
-            ROUND(AVG(ps.turnovers), 1) as avg_turnovers,
-            ROUND(AVG(ps.fouls), 1) as avg_fouls,
-            -- 总计
-            SUM(ps.points) as total_points,
-            SUM(ps.rebounds) as total_rebounds,
-            SUM(ps.assists) as total_assists,
-            SUM(ps.steals) as total_steals,
-            SUM(ps.blocks) as total_blocks,
-            -- 投篮数据
-            SUM(ps.fg2_made) as fg2m,
-            SUM(ps.fg2_attempts) as fg2a,
-            SUM(ps.fg3_made) as fg3m,
-            SUM(ps.fg3_attempts) as fg3a,
-            SUM(ps.ft_made) as ftm,
-            SUM(ps.ft_attempts) as fta
+            COUNT(*) as 场次,
+            SUM(points) as 总得分,
+            ROUND(AVG(points), 1) as 场均得分,
+            SUM(rebounds) as 总篮板,
+            ROUND(AVG(rebounds), 1) as 场均篮板,
+            SUM(assists) as 总助攻,
+            ROUND(AVG(assists), 1) as 场均助攻,
+            SUM(steals) as 总抢断,
+            ROUND(AVG(steals), 1) as 场均抢断,
+            SUM(blocks) as 总盖帽,
+            ROUND(AVG(blocks), 1) as 场均盖帽
         FROM player_stats ps
         JOIN players p ON ps.player_id = p.player_id
-        JOIN matches m ON ps.match_id = m.match_id
-        WHERE 1=1 {where_clause}
         GROUP BY p.player_id
+        ORDER BY 场均得分 DESC
     """
     
     try:
-        df = pd.read_sql(query, conn)
+        df_base = pd.read_sql(base_query, conn)
         
-        if not df.empty:
-            # 计算命中率和胜率
-            df['fg2_pct'] = df.apply(lambda x: round(x['fg2m']/x['fg2a']*100, 1) if x['fg2a'] > 0 else 0, axis=1)
-            df['fg3_pct'] = df.apply(lambda x: round(x['fg3m']/x['fg3a']*100, 1) if x['fg3a'] > 0 else 0, axis=1)
-            df['ft_pct'] = df.apply(lambda x: round(x['ftm']/x['fta']*100, 1) if x['fta'] > 0 else 0, axis=1)
-            df['win_rate'] = df.apply(lambda x: round(x['wins']/x['games']*100, 1) if x['games'] > 0 else 0, axis=1)
-            
-            # 根据排序方式排序
-            sort_map = {
-                "得分": "avg_points",
-                "篮板": "avg_rebounds", 
-                "助攻": "avg_assists",
-                "抢断": "avg_steals",
-                "盖帽": "avg_blocks",
-                "胜率": "win_rate"
-            }
-            df = df.sort_values(by=sort_map[sort_by], ascending=False)
-            
-            # 显示当前筛选条件
-            if game_type_filter != "全部":
-                st.info(f"🏀 当前筛选：{game_type_filter}")
-            
-            if stat_type == "综合数据":
-                st.subheader("📊 综合数据")
-                display_df = df[['player_name', 'games', 'wins', 'win_rate', 'avg_points', 'avg_rebounds', 
-                                 'avg_assists', 'avg_steals', 'avg_blocks', 'avg_turnovers', 'avg_fouls']].copy()
-                display_df.columns = ['球员', '场次', '胜场', '胜率%', '得分', '篮板', 
-                                      '助攻', '抢断', '盖帽', '失误', '犯规']
-                st.dataframe(display_df, use_container_width=True)
-                
-            elif stat_type == "投篮命中率":
-                st.subheader("🏹 投篮命中率")
-                display_df = df[['player_name', 'games', 'fg2_pct', 'fg3_pct', 'ft_pct', 
-                                 'fg2m', 'fg2a', 'fg3m', 'fg3a', 'ftm', 'fta']].copy()
-                display_df.columns = ['球员', '场次', '两分%', '三分%', '罚球%', 
-                                      '两中', '两投', '三中', '三投', '罚中', '罚投']
-                st.dataframe(display_df, use_container_width=True)
-                
-            elif stat_type == "防守数据":
-                st.subheader("🛡️ 防守数据")
-                display_df = df[['player_name', 'games', 'avg_rebounds', 'avg_steals', 'avg_blocks',
-                                 'total_rebounds', 'total_steals', 'total_blocks']].copy()
-                display_df.columns = ['球员', '场次', '篮板', '抢断', '盖帽', 
-                                      '总篮板', '总抢断', '总盖帽']
-                st.dataframe(display_df, use_container_width=True)
-                
-            else:  # 胜率统计
-                st.subheader("🏆 胜率统计")
-                display_df = df[['player_name', 'games', 'wins', 'win_rate', 'avg_points', 
-                                 'avg_rebounds', 'avg_assists']].copy()
-                display_df.columns = ['球员', '场次', '胜场', '胜率%', '场均得分', '场均篮板', '场均助攻']
-                st.dataframe(display_df, use_container_width=True)
-            
-            # 统计信息
-            st.caption(f"📊 总计 {len(df)} 名球员，共 {df['games'].sum()} 场比赛")
-            
+        if not df_base.empty:
+            st.dataframe(df_base, use_container_width=True)
+            st.caption(f"📊 总计 {len(df_base)} 名球员")
         else:
-            st.warning("暂无数据，请先录入比赛数据")
+            st.warning("暂无基础数据")
             
+            # 调试信息
+            with st.expander("🔧 调试信息"):
+                player_count = pd.read_sql("SELECT COUNT(*) as cnt FROM players", conn).iloc[0]['cnt']
+                match_count = pd.read_sql("SELECT COUNT(*) as cnt FROM matches", conn).iloc[0]['cnt']
+                stats_count = pd.read_sql("SELECT COUNT(*) as cnt FROM player_stats", conn).iloc[0]['cnt']
+                
+                st.write(f"👤 球员数量: {player_count}")
+                st.write(f"📅 比赛数量: {match_count}")
+                st.write(f"📊 统计数据条数: {stats_count}")
+                
+                # 显示原始数据
+                if stats_count > 0:
+                    st.write("原始统计数据：")
+                    raw_data = pd.read_sql("SELECT * FROM player_stats LIMIT 5", conn)
+                    st.dataframe(raw_data)
     except Exception as e:
-        st.error(f"查询出错：{e}")
+        st.error(f"查询出错: {e}")
+    
+    st.divider()
+    
+    # 如果基础查询成功，再显示带比赛类型筛选的详细数据
+    if not df_base.empty:
+        st.subheader("🏀 按比赛类型筛选")
+        
+        # 构建带筛选的查询
+        where_clause = ""
+        if game_type_filter != "全部":
+            game_type_code = game_type_map[game_type_filter]
+            where_clause = f"AND m.game_type = '{game_type_code}'"
+        
+        detail_query = f"""
+            SELECT 
+                p.player_name,
+                COUNT(DISTINCT ps.match_id) as 场次,
+                ROUND(AVG(ps.points), 1) as 场均得分,
+                ROUND(AVG(ps.rebounds), 1) as 场均篮板,
+                ROUND(AVG(ps.assists), 1) as 场均助攻,
+                ROUND(AVG(ps.steals), 1) as 场均抢断,
+                ROUND(AVG(ps.blocks), 1) as 场均盖帽,
+                ROUND(SUM(ps.fg2_made)*100.0/SUM(ps.fg2_attempts), 1) as 两分%,
+                ROUND(SUM(ps.fg3_made)*100.0/SUM(ps.fg3_attempts), 1) as 三分%,
+                ROUND(SUM(ps.ft_made)*100.0/SUM(ps.ft_attempts), 1) as 罚球%
+            FROM player_stats ps
+            JOIN players p ON ps.player_id = p.player_id
+            JOIN matches m ON ps.match_id = m.match_id
+            WHERE 1=1 {where_clause}
+            GROUP BY p.player_id
+            ORDER BY 场均得分 DESC
+        """
+        
+        try:
+            df_detail = pd.read_sql(detail_query, conn)
+            
+            if not df_detail.empty:
+                if game_type_filter != "全部":
+                    st.info(f"当前筛选: {game_type_filter}")
+                st.dataframe(df_detail, use_container_width=True)
+            else:
+                st.info(f"暂无 {game_type_filter} 类型的数据")
+        except Exception as e:
+            st.error(f"详细查询出错: {e}")
 # ==================== 比赛记录 ====================
 elif menu == "📋 比赛记录":
     st.header("📋 比赛记录")
@@ -839,4 +802,5 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
