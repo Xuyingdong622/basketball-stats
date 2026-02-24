@@ -5,29 +5,6 @@ import plotly.express as px
 from datetime import datetime
 import os
 
-# ========== 页面美化配置 ==========
-st.set_page_config(
-    page_title="篮球数据统计系统", 
-    page_icon="🏀", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# ========== 自定义CSS样式 ==========
-st.markdown("""
-[这里是你刚添加的所有CSS样式代码...]
-""", unsafe_allow_html=True)
-
-# ========== 添加动画效果 ==========
-st.markdown("""
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelector('.main').classList.add('fade-in');
-});
-</script>
-""", unsafe_allow_html=True)
-
-
 # ========== 数据库初始化函数 ==========
 def init_database():
     """初始化数据库表结构"""
@@ -149,37 +126,11 @@ update_existing_matches()
 # ========== 连接数据库 ==========
 conn = sqlite3.connect('basketball.db', check_same_thread=False)
 
-# ========== 主页面标题美化 ==========
-st.markdown("""
-<div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
-    <h1 style="color: white; font-size: 3.5rem; margin: 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
-        🏀 篮球数据统计系统
-    </h1>
-    <p style="color: rgba(255,255,255,0.9); font-size: 1.2rem; margin-top: 10px;">
-        记录每一刻精彩，见证每一次进步
-    </p>
-</div>
-""", unsafe_allow_html=True)
+# ========== 主页面标题 ==========
+st.title("小东瓜数据统计系统")
 
-# ========== 侧边栏菜单美化 ==========
-st.sidebar.markdown("""
-<div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; margin-bottom: 20px;">
-    <h2 style="color: white; margin: 0; font-size: 1.8rem;">🏀 菜单</h2>
-    <p style="color: rgba(255,255,255,0.8); margin: 5px 0 0;">选择功能</p>
-</div>
-""", unsafe_allow_html=True)
-
-menu = st.sidebar.selectbox("", ["📊 球员数据榜", "📋 比赛记录", "📝 数据录入", "📋 战术板", "⚙️ 管理后台"])
-
-# ========== 页脚 ==========
-st.sidebar.markdown("""
-<div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; margin-top: 30px;">
-    <p style="color: white; margin: 0; font-size: 0.9rem;">
-        © 2024 篮球数据统计系统<br>
-        记录每一刻精彩
-    </p>
-</div>
-""", unsafe_allow_html=True)
+# ========== 侧边栏菜单 ==========
+menu = st.sidebar.selectbox("菜单", [ "📊 球员数据榜", "📋 比赛记录", "📝 数据录入", "⚙️ 管理后台"])
 
 # ==================== 数据录入 ====================
 if menu == "📝 数据录入":
@@ -1015,8 +966,6 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
-
-
 
 
 
