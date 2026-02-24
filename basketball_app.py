@@ -76,25 +76,20 @@ def init_database():
     conn.close()
     print("✅ 数据库初始化完成")
 
-# ========== 应用配置 ==========
-st.set_page_config(page_title="篮球数据统计系统", page_icon="🏀", layout="wide")
-
-# 初始化数据库
-init_database()
-
-# 连接数据库
-conn = sqlite3.connect('basketball.db', check_same_thread=False)
-
-# 页面配置
+# ========== 页面配置 - 只能在这里调用一次 ==========
 st.set_page_config(page_title="篮球数据统计", page_icon="🏀", layout="wide")
 
-# 连接数据库
+# ========== 初始化数据库 ==========
+init_database()
+
+# ========== 连接数据库 ==========
 conn = sqlite3.connect('basketball.db', check_same_thread=False)
 
+# ========== 主页面标题 ==========
 st.title("🏀 球局数据统计系统")
 
-# 侧边栏菜单
-menu = st.sidebar.selectbox("菜单", ["📝 数据录入", "📊 数据榜", "📋 比赛记录", "⚙️ 管理后台"])
+# ========== 侧边栏菜单 ==========
+menu = st.sidebar.selectbox("菜单", ["📝 数据录入", "📊 球员数据榜", "📋 比赛记录", "⚙️ 管理后台"])
 
 # ==================== 数据录入 ====================
 if menu == "📝 数据录入":
@@ -844,3 +839,4 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
