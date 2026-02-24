@@ -1,7 +1,89 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+import plotly.express as px
 from datetime import datetime
+import os
+
+# ========== 数据库初始化函数 ==========
+def init_database():
+    """初始化数据库表结构"""
+    conn = sqlite3.connect('basketball.db')
+    cursor = conn.cursor()
+    
+    # 创建球队表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS teams (
+            team_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_name TEXT NOT NULL UNIQUE,
+            created_date DATE DEFAULT CURRENT_DATE
+        )
+    """)
+    
+    # 创建球员表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS players (
+            player_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_name TEXT NOT NULL,
+            team_id INTEGER,
+            jersey_number INTEGER DEFAULT 0,
+            FOREIGN KEY (team_id) REFERENCES teams(team_id)
+        )
+    """)
+    
+    # 创建比赛表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS matches (
+            match_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            match_date DATE NOT NULL,
+            game_type TEXT DEFAULT '5v5',
+            home_team_id INTEGER,
+            away_team_id INTEGER,
+            home_win INTEGER DEFAULT 0,
+            away_win INTEGER DEFAULT 0,
+            FOREIGN KEY (home_team_id) REFERENCES teams(team_id),
+            FOREIGN KEY (away_team_id) REFERENCES teams(team_id)
+        )
+    """)
+    
+    # 创建球员统计表（包含所有需要的字段）
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS player_stats (
+            stat_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_id INTEGER,
+            match_id INTEGER,
+            points INTEGER DEFAULT 0,
+            rebounds INTEGER DEFAULT 0,
+            assists INTEGER DEFAULT 0,
+            steals INTEGER DEFAULT 0,
+            blocks INTEGER DEFAULT 0,
+            turnovers INTEGER DEFAULT 0,
+            fouls INTEGER DEFAULT 0,
+            minutes_played REAL DEFAULT 0,
+            fg2_made INTEGER DEFAULT 0,
+            fg2_attempts INTEGER DEFAULT 0,
+            fg3_made INTEGER DEFAULT 0,
+            fg3_attempts INTEGER DEFAULT 0,
+            ft_made INTEGER DEFAULT 0,
+            ft_attempts INTEGER DEFAULT 0,
+            is_home INTEGER DEFAULT 1,
+            FOREIGN KEY (player_id) REFERENCES players(player_id),
+            FOREIGN KEY (match_id) REFERENCES matches(match_id)
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
+    print("✅ 数据库初始化完成")
+
+# ========== 应用配置 ==========
+st.set_page_config(page_title="篮球数据统计系统", page_icon="🏀", layout="wide")
+
+# 初始化数据库
+init_database()
+
+# 连接数据库
+conn = sqlite3.connect('basketball.db', check_same_thread=False)
 
 # 页面配置
 st.set_page_config(page_title="篮球数据统计", page_icon="🏀", layout="wide")
