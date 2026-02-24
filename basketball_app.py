@@ -31,12 +31,11 @@ def init_database():
         )
     """)
     
-    # 创建比赛表（包含 match_name 字段）
+    # 创建比赛表
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS matches (
             match_id INTEGER PRIMARY KEY AUTOINCREMENT,
             match_date DATE NOT NULL,
-            match_name TEXT,
             game_type TEXT DEFAULT '5v5',
             home_team_id INTEGER,
             away_team_id INTEGER,
@@ -46,6 +45,17 @@ def init_database():
             FOREIGN KEY (away_team_id) REFERENCES teams(team_id)
         )
     """)
+    
+    # 检查并添加 match_name 字段
+    cursor.execute("PRAGMA table_info(matches)")
+    columns = [col[1] for col in cursor.fetchall()]
+    
+    if 'match_name' not in columns:
+        try:
+            cursor.execute("ALTER TABLE matches ADD COLUMN match_name TEXT")
+            print("✅ 添加 match_name 字段成功")
+        except Exception as e:
+            print(f"添加 match_name 字段失败: {e}")
     
     # 创建球员统计表
     cursor.execute("""
@@ -77,11 +87,41 @@ def init_database():
     conn.close()
     print("✅ 数据库初始化完成")
 
+# ========== 更新已有数据的 match_name ==========
+def update_existing_matches():
+    """为已有的比赛设置默认的 match_name"""
+    conn = sqlite3.connect('basketball.db')
+    cursor = conn.cursor()
+    
+    # 检查是否有 match_name 为空的记录
+    cursor.execute("SELECT match_id, match_date FROM matches WHERE match_name IS NULL")
+    null_matches = cursor.fetchall()
+    
+    for match_id, match_date in null_matches:
+        # 获取当天已有多少场比赛
+        cursor.execute("""
+            SELECT COUNT(*) FROM matches 
+            WHERE match_date = ? AND match_name IS NOT NULL
+        """, (match_date,))
+        count = cursor.fetchone()[0]
+        
+        # 设置默认名称
+        default_name = f"第{count + 1}场"
+        cursor.execute("UPDATE matches SET match_name = ? WHERE match_id = ?", 
+                      (default_name, match_id))
+        print(f"✅ 更新比赛 {match_date} 为 {default_name}")
+    
+    conn.commit()
+    conn.close()
+
 # ========== 页面配置 ==========
 st.set_page_config(page_title="篮球数据统计系统", page_icon="🏀", layout="wide")
 
 # ========== 初始化数据库 ==========
 init_database()
+
+# ========== 更新已有数据 ==========
+update_existing_matches()
 
 # ========== 连接数据库 ==========
 conn = sqlite3.connect('basketball.db', check_same_thread=False)
@@ -801,3 +841,4 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
