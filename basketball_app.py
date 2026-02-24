@@ -115,7 +115,7 @@ def update_existing_matches():
     conn.close()
 
 # ========== 页面配置 ==========
-st.set_page_config(page_title="篮球数据统计系统", page_icon="🏀", layout="wide")
+st.set_page_config(page_title="小东瓜数据统计系统", page_icon="🏀", layout="wide")
 
 # ========== 初始化数据库 ==========
 init_database()
@@ -127,7 +127,7 @@ update_existing_matches()
 conn = sqlite3.connect('basketball.db', check_same_thread=False)
 
 # ========== 主页面标题 ==========
-st.title("🏀 球局数据统计系统")
+st.title("小东瓜数据统计系统")
 
 # ========== 侧边栏菜单 ==========
 menu = st.sidebar.selectbox("菜单", ["📝 数据录入", "📊 球员数据榜", "📋 比赛记录", "⚙️ 管理后台"])
@@ -920,6 +920,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
