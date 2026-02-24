@@ -511,63 +511,70 @@ elif menu == "📋 比赛记录":
                 with col3:
                     st.metric("分差", abs(home_total - away_total))
                 
-                st.divider()
+                st.markdown("---")
                 
-                # ===== 主队数据表格（带删除按钮） =====
+                # ===== 主队数据表格 =====
                 if not home_stats.empty:
                     st.subheader(f"🏠 {m['home_team']}")
                     
-                    # 创建表格列
-                    col_name, col_points, col_reb, col_ast, col_stl, col_blk, col_to, col_fl, col_fg, col_del = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 2, 0.5])
+                    # 使用HTML/CSS样式让表格更紧凑，数字更大
+                    st.markdown("""
+                    <style>
+                    .compact-table {
+                        font-size: 16px;
+                        line-height: 1.2;
+                        margin-bottom: 5px;
+                    }
+                    .compact-table th {
+                        background-color: #f0f2f6;
+                        padding: 4px 8px;
+                        text-align: center;
+                        font-weight: 600;
+                    }
+                    .compact-table td {
+                        padding: 2px 8px;
+                        text-align: center;
+                    }
+                    .delete-btn {
+                        color: #ff4b4b;
+                        cursor: pointer;
+                        font-size: 18px;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
                     
-                    with col_name:
-                        st.write("**球员**")
-                    with col_points:
-                        st.write("**得分**")
-                    with col_reb:
-                        st.write("**篮板**")
-                    with col_ast:
-                        st.write("**助攻**")
-                    with col_stl:
-                        st.write("**抢断**")
-                    with col_blk:
-                        st.write("**盖帽**")
-                    with col_to:
-                        st.write("**失误**")
-                    with col_fl:
-                        st.write("**犯规**")
-                    with col_fg:
-                        st.write("**投篮**")
-                    with col_del:
-                        st.write("**操作**")
+                    # 创建表头
+                    cols = st.columns([2, 1, 1, 1, 1, 1, 1, 1, 2.5, 0.8])
+                    headers = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', '投篮', '操作']
+                    for col, header in zip(cols, headers):
+                        col.markdown(f"**{header}**")
                     
-                    st.divider()
+                    st.markdown("---")
                     
+                    # 显示主队数据
                     for _, row in home_stats.iterrows():
-                        col_name, col_points, col_reb, col_ast, col_stl, col_blk, col_to, col_fl, col_fg, col_del = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 2, 0.5])
+                        cols = st.columns([2, 1, 1, 1, 1, 1, 1, 1, 2.5, 0.8])
                         
-                        with col_name:
-                            st.write(row['player_name'])
-                        with col_points:
-                            st.write(row['points'])
-                        with col_reb:
-                            st.write(row['rebounds'])
-                        with col_ast:
-                            st.write(row['assists'])
-                        with col_stl:
-                            st.write(row['steals'])
-                        with col_blk:
-                            st.write(row['blocks'])
-                        with col_to:
-                            st.write(row['turnovers'])
-                        with col_fl:
-                            st.write(row['fouls'])
-                        with col_fg:
-                            fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
-                            fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
-                            ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
-                            st.write(f"{fg2} | {fg3} | {ft}")
-                        with col_del:
+                        # 球员名
+                        cols[0].markdown(f"**{row['player_name']}**")
+                        
+                        # 基础数据
+                        cols[1].markdown(f"**{row['points']}**")
+                        cols[2].markdown(f"**{row['rebounds']}**")
+                        cols[3].markdown(f"**{row['assists']}**")
+                        cols[4].markdown(f"**{row['steals']}**")
+                        cols[5].markdown(f"**{row['blocks']}**")
+                        cols[6].markdown(f"**{row['turnovers']}**")
+                        cols[7].markdown(f"**{row['fouls']}**")
+                        
+                        # 投篮数据
+                        fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
+                        fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
+                        ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
+                        cols[8].markdown(f"**{fg2}** | **{fg3}** | **{ft}**")
+                        
+                        # 删除按钮
+                        with cols[9]:
                             if st.button("🗑️", key=f"del_home_{row['stat_id']}", help="删除这条数据"):
                                 try:
                                     conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
@@ -577,67 +584,48 @@ elif menu == "📋 比赛记录":
                                 except Exception as e:
                                     st.error(f"❌ 删除失败：{e}")
                         
-                        st.divider()
+                        st.markdown("---")
                 else:
                     st.info(f"{m['home_team']} 暂无球员数据")
                 
-                st.divider()
+                st.markdown("---")
                 
-                # ===== 客队数据表格（带删除按钮） =====
+                # ===== 客队数据表格 =====
                 if not away_stats.empty:
                     st.subheader(f"✈️ {m['away_team']}")
                     
-                    # 创建表格列
-                    col_name, col_points, col_reb, col_ast, col_stl, col_blk, col_to, col_fl, col_fg, col_del = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 2, 0.5])
+                    # 创建表头
+                    cols = st.columns([2, 1, 1, 1, 1, 1, 1, 1, 2.5, 0.8])
+                    headers = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', '投篮', '操作']
+                    for col, header in zip(cols, headers):
+                        col.markdown(f"**{header}**")
                     
-                    with col_name:
-                        st.write("**球员**")
-                    with col_points:
-                        st.write("**得分**")
-                    with col_reb:
-                        st.write("**篮板**")
-                    with col_ast:
-                        st.write("**助攻**")
-                    with col_stl:
-                        st.write("**抢断**")
-                    with col_blk:
-                        st.write("**盖帽**")
-                    with col_to:
-                        st.write("**失误**")
-                    with col_fl:
-                        st.write("**犯规**")
-                    with col_fg:
-                        st.write("**投篮**")
-                    with col_del:
-                        st.write("**操作**")
+                    st.markdown("---")
                     
-                    st.divider()
-                    
+                    # 显示客队数据
                     for _, row in away_stats.iterrows():
-                        col_name, col_points, col_reb, col_ast, col_stl, col_blk, col_to, col_fl, col_fg, col_del = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 2, 0.5])
+                        cols = st.columns([2, 1, 1, 1, 1, 1, 1, 1, 2.5, 0.8])
                         
-                        with col_name:
-                            st.write(row['player_name'])
-                        with col_points:
-                            st.write(row['points'])
-                        with col_reb:
-                            st.write(row['rebounds'])
-                        with col_ast:
-                            st.write(row['assists'])
-                        with col_stl:
-                            st.write(row['steals'])
-                        with col_blk:
-                            st.write(row['blocks'])
-                        with col_to:
-                            st.write(row['turnovers'])
-                        with col_fl:
-                            st.write(row['fouls'])
-                        with col_fg:
-                            fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
-                            fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
-                            ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
-                            st.write(f"{fg2} | {fg3} | {ft}")
-                        with col_del:
+                        # 球员名
+                        cols[0].markdown(f"**{row['player_name']}**")
+                        
+                        # 基础数据
+                        cols[1].markdown(f"**{row['points']}**")
+                        cols[2].markdown(f"**{row['rebounds']}**")
+                        cols[3].markdown(f"**{row['assists']}**")
+                        cols[4].markdown(f"**{row['steals']}**")
+                        cols[5].markdown(f"**{row['blocks']}**")
+                        cols[6].markdown(f"**{row['turnovers']}**")
+                        cols[7].markdown(f"**{row['fouls']}**")
+                        
+                        # 投篮数据
+                        fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
+                        fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
+                        ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
+                        cols[8].markdown(f"**{fg2}** | **{fg3}** | **{ft}**")
+                        
+                        # 删除按钮
+                        with cols[9]:
                             if st.button("🗑️", key=f"del_away_{row['stat_id']}", help="删除这条数据"):
                                 try:
                                     conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
@@ -647,7 +635,7 @@ elif menu == "📋 比赛记录":
                                 except Exception as e:
                                     st.error(f"❌ 删除失败：{e}")
                         
-                        st.divider()
+                        st.markdown("---")
                 else:
                     st.info(f"{m['away_team']} 暂无球员数据")
                 
@@ -932,6 +920,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
