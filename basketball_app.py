@@ -141,11 +141,11 @@ if menu == "📝 数据录入":
         SELECT m.match_id, m.match_date, m.match_name, m.game_type,
                CASE 
                    WHEN m.home_team_id IS NOT NULL THEN t1.team_name 
-                   ELSE '友谊赛' 
+                   ELSE '队伍1' 
                END as home_team,
                CASE 
                    WHEN m.away_team_id IS NOT NULL THEN t2.team_name 
-                   ELSE '友谊赛' 
+                   ELSE '队伍2' 
                END as away_team
         FROM matches m
         LEFT JOIN teams t1 ON m.home_team_id = t1.team_id
@@ -440,8 +440,14 @@ elif menu == "📋 比赛记录":
     # 查询所有比赛（包含match_name）
     matches = pd.read_sql("""
         SELECT m.match_id, m.match_date, m.match_name, m.game_type, m.home_win, m.away_win,
-               COALESCE(t1.team_name, '主队') as home_team,
-               COALESCE(t2.team_name, '客队') as away_team
+               CASE 
+                   WHEN m.home_team_id IS NOT NULL THEN t1.team_name 
+                   ELSE '队伍1' 
+               END as home_team,
+               CASE 
+                   WHEN m.away_team_id IS NOT NULL THEN t2.team_name 
+                   ELSE '队伍2' 
+               END as away_team
         FROM matches m
         LEFT JOIN teams t1 ON m.home_team_id = t1.team_id
         LEFT JOIN teams t2 ON m.away_team_id = t2.team_id
@@ -775,8 +781,14 @@ elif menu == "⚙️ 管理后台":
                 m.match_date,
                 m.match_name,
                 m.game_type,
-                COALESCE(t1.team_name, '主队') as home_team,
-                COALESCE(t2.team_name, '客队') as away_team,
+                CASE 
+                    WHEN m.home_team_id IS NOT NULL THEN t1.team_name 
+                    ELSE '队伍1' 
+                END as home_team,
+                CASE 
+                    WHEN m.away_team_id IS NOT NULL THEN t2.team_name 
+                    ELSE '队伍2' 
+                END as away_team,
                 m.home_win,
                 m.away_win,
                 COUNT(ps.stat_id) as stats_count
@@ -841,4 +853,5 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
