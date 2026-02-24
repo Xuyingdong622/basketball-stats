@@ -86,7 +86,7 @@ init_database()
 conn = sqlite3.connect('basketball.db', check_same_thread=False)
 
 # ========== 主页面标题 ==========
-st.title("🏀 球局数据统计系统")
+st.title("小东瓜数据统计系统")
 
 # ========== 侧边栏菜单 ==========
 menu = st.sidebar.selectbox("菜单", ["📝 数据录入", "📊 球员数据榜", "📋 比赛记录", "⚙️ 管理后台"])
@@ -295,7 +295,19 @@ elif menu == "📊 球员数据榜":
             SUM(turnovers) as total_turnovers,
             ROUND(AVG(turnovers), 1) as avg_turnovers,
             SUM(fouls) as total_fouls,
-            ROUND(AVG(fouls), 1) as avg_fouls
+            ROUND(AVG(fouls), 1) as avg_fouls,
+            SUM(fg2_made) as total_fg2_made,
+            ROUND(AVG(fg2_made), 1) as avg_fg2_made,
+            SUM(fg2_attempts) as total_fg2_att,
+            ROUND(AVG(fg2_attempts), 1) as avg_fg2_att,
+            SUM(fg3_made) as total_fg3_made,
+            ROUND(AVG(fg3_made), 1) as avg_fg3_made,
+            SUM(fg3_attempts) as total_fg3_att,
+            ROUND(AVG(fg3_attempts), 1) as avg_fg3_att,
+            SUM(ft_made) as total_ft_made,
+            ROUND(AVG(ft_made), 1) as avg_ft_made,
+            SUM(ft_attempts) as total_ft_att,
+            ROUND(AVG(ft_attempts), 1) as avg_ft_att
         FROM player_stats ps
         JOIN players p ON ps.player_id = p.player_id
         GROUP BY p.player_id
@@ -306,6 +318,11 @@ elif menu == "📊 球员数据榜":
         df_base = pd.read_sql(base_query, conn)
         
         if not df_base.empty:
+            # 计算命中率
+            df_base['fg2_pct'] = (df_base['total_fg2_made'] / df_base['total_fg2_att'] * 100).round(1)
+            df_base['fg3_pct'] = (df_base['total_fg3_made'] / df_base['total_fg3_att'] * 100).round(1)
+            df_base['ft_pct'] = (df_base['total_ft_made'] / df_base['total_ft_att'] * 100).round(1)
+            
             # 重命名列名用于显示
             df_base_display = df_base.rename(columns={
                 'player_name': '球员',
@@ -323,7 +340,22 @@ elif menu == "📊 球员数据榜":
                 'total_turnovers': '总失误',
                 'avg_turnovers': '场均失误',
                 'total_fouls': '总犯规',
-                'avg_fouls': '场均犯规'
+                'avg_fouls': '场均犯规',
+                'total_fg2_made': '两分总中',
+                'avg_fg2_made': '场均两分中',
+                'total_fg2_att': '两分总投',
+                'avg_fg2_att': '场均两分投',
+                'total_fg3_made': '三分总中',
+                'avg_fg3_made': '场均三分中',
+                'total_fg3_att': '三分总投',
+                'avg_fg3_att': '场均三分投',
+                'total_ft_made': '罚球总中',
+                'avg_ft_made': '场均罚球中',
+                'total_ft_att': '罚球总投',
+                'avg_ft_att': '场均罚球投',
+                'fg2_pct': '两分%',
+                'fg3_pct': '三分%',
+                'ft_pct': '罚球%'
             })
             st.dataframe(df_base_display, use_container_width=True)
             st.caption(f"📊 总计 {len(df_base)} 名球员")
@@ -371,9 +403,18 @@ elif menu == "📊 球员数据榜":
                 ROUND(AVG(ps.blocks), 1) as avg_blocks,
                 ROUND(AVG(ps.turnovers), 1) as avg_turnovers,
                 ROUND(AVG(ps.fouls), 1) as avg_fouls,
-                ROUND(SUM(ps.fg2_made)*100.0/SUM(ps.fg2_attempts), 1) as fg2_pct,
-                ROUND(SUM(ps.fg3_made)*100.0/SUM(ps.fg3_attempts), 1) as fg3_pct,
-                ROUND(SUM(ps.ft_made)*100.0/SUM(ps.ft_attempts), 1) as ft_pct
+                ROUND(AVG(ps.fg2_made), 1) as avg_fg2_made,
+                ROUND(AVG(ps.fg2_attempts), 1) as avg_fg2_att,
+                ROUND(AVG(ps.fg3_made), 1) as avg_fg3_made,
+                ROUND(AVG(ps.fg3_attempts), 1) as avg_fg3_att,
+                ROUND(AVG(ps.ft_made), 1) as avg_ft_made,
+                ROUND(AVG(ps.ft_attempts), 1) as avg_ft_att,
+                SUM(ps.fg2_made) as total_fg2_made,
+                SUM(ps.fg2_attempts) as total_fg2_att,
+                SUM(ps.fg3_made) as total_fg3_made,
+                SUM(ps.fg3_attempts) as total_fg3_att,
+                SUM(ps.ft_made) as total_ft_made,
+                SUM(ps.ft_attempts) as total_ft_att
             FROM player_stats ps
             JOIN players p ON ps.player_id = p.player_id
             JOIN matches m ON ps.match_id = m.match_id
@@ -389,17 +430,28 @@ elif menu == "📊 球员数据榜":
                 if game_type_filter != "全部":
                     st.info(f"当前筛选: {game_type_filter}")
                 
+                # 计算命中率
+                df_detail['fg2_pct'] = (df_detail['total_fg2_made'] / df_detail['total_fg2_att'] * 100).round(1)
+                df_detail['fg3_pct'] = (df_detail['total_fg3_made'] / df_detail['total_fg3_att'] * 100).round(1)
+                df_detail['ft_pct'] = (df_detail['total_ft_made'] / df_detail['total_ft_att'] * 100).round(1)
+                
                 # 重命名列名用于显示
                 df_detail_display = df_detail.rename(columns={
                     'player_name': '球员',
                     'games': '场次',
-                    'avg_points': '场均得分',
-                    'avg_rebounds': '场均篮板',
-                    'avg_assists': '场均助攻',
-                    'avg_steals': '场均抢断',
-                    'avg_blocks': '场均盖帽',
-                    'avg_turnovers': '场均失误',
-                    'avg_fouls': '场均犯规',
+                    'avg_points': '得分',
+                    'avg_rebounds': '篮板',
+                    'avg_assists': '助攻',
+                    'avg_steals': '抢断',
+                    'avg_blocks': '盖帽',
+                    'avg_turnovers': '失误',
+                    'avg_fouls': '犯规',
+                    'avg_fg2_made': '两分中',
+                    'avg_fg2_att': '两分投',
+                    'avg_fg3_made': '三分中',
+                    'avg_fg3_att': '三分投',
+                    'avg_ft_made': '罚球中',
+                    'avg_ft_att': '罚球投',
                     'fg2_pct': '两分%',
                     'fg3_pct': '三分%',
                     'ft_pct': '罚球%'
@@ -843,6 +895,7 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
 
 
