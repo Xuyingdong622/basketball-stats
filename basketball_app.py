@@ -468,7 +468,6 @@ elif menu == "📋 比赛记录":
         elif m['away_win']:
             winner = f"🏆 {m['away_team']} 获胜"
         
-        # 显示比赛信息
         with st.expander(f"📅 {m['match_date']} {m['match_name']} [{game_type_display}] {m['home_team']} vs {m['away_team']} {winner}"):
             # 查询本场比赛的所有球员数据
             all_stats_df = pd.read_sql(f"""
@@ -504,7 +503,6 @@ elif menu == "📋 比赛记录":
                 home_total = home_stats['points'].sum() if not home_stats.empty else 0
                 away_total = away_stats['points'].sum() if not away_stats.empty else 0
                 
-                # 显示比分
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric(f"{m['home_team']} 总得分", home_total)
@@ -515,88 +513,147 @@ elif menu == "📋 比赛记录":
                 
                 st.divider()
                 
-                # ===== 主队数据表格 =====
+                # ===== 主队数据表格（带删除按钮） =====
                 if not home_stats.empty:
                     st.subheader(f"🏠 {m['home_team']}")
                     
-                    # 计算投篮命中率
-                    home_stats['fg2'] = home_stats.apply(lambda x: f"{x['fg2_made']}/{x['fg2_attempts']}", axis=1)
-                    home_stats['fg3'] = home_stats.apply(lambda x: f"{x['fg3_made']}/{x['fg3_attempts']}", axis=1)
-                    home_stats['ft'] = home_stats.apply(lambda x: f"{x['ft_made']}/{x['ft_attempts']}", axis=1)
+                    # 创建表格列
+                    col_name, col_points, col_reb, col_ast, col_stl, col_blk, col_to, col_fl, col_fg, col_del = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 2, 0.5])
                     
-                    # 选择要显示的列
-                    home_display = home_stats[['player_name', 'points', 'rebounds', 'assists', 
-                                               'steals', 'blocks', 'turnovers', 'fouls', 
-                                               'fg2', 'fg3', 'ft']].copy()
+                    with col_name:
+                        st.write("**球员**")
+                    with col_points:
+                        st.write("**得分**")
+                    with col_reb:
+                        st.write("**篮板**")
+                    with col_ast:
+                        st.write("**助攻**")
+                    with col_stl:
+                        st.write("**抢断**")
+                    with col_blk:
+                        st.write("**盖帽**")
+                    with col_to:
+                        st.write("**失误**")
+                    with col_fl:
+                        st.write("**犯规**")
+                    with col_fg:
+                        st.write("**投篮**")
+                    with col_del:
+                        st.write("**操作**")
                     
-                    home_display.columns = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', 
-                                            '失误', '犯规', '两分', '三分', '罚球']
+                    st.divider()
                     
-                    st.dataframe(home_display, use_container_width=True, hide_index=True)
-                    
-                    # 添加删除按钮（可选）
-                    if st.checkbox(f"显示删除按钮 - {m['home_team']}", key=f"show_del_home_{m['match_id']}"):
-                        for idx, row in home_stats.iterrows():
-                            col_a, col_b = st.columns([5, 1])
-                            with col_a:
-                                st.write(f"{row['player_name']}: {row['points']}分, {row['rebounds']}板, {row['assists']}助")
-                            with col_b:
-                                if st.button("🗑️", key=f"del_stat_{row['stat_id']}", help="删除这条数据"):
-                                    try:
-                                        conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
-                                        conn.commit()
-                                        st.success(f"✅ 已删除 {row['player_name']} 的数据")
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ 删除失败：{e}")
-                            st.divider()
+                    for _, row in home_stats.iterrows():
+                        col_name, col_points, col_reb, col_ast, col_stl, col_blk, col_to, col_fl, col_fg, col_del = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 2, 0.5])
+                        
+                        with col_name:
+                            st.write(row['player_name'])
+                        with col_points:
+                            st.write(row['points'])
+                        with col_reb:
+                            st.write(row['rebounds'])
+                        with col_ast:
+                            st.write(row['assists'])
+                        with col_stl:
+                            st.write(row['steals'])
+                        with col_blk:
+                            st.write(row['blocks'])
+                        with col_to:
+                            st.write(row['turnovers'])
+                        with col_fl:
+                            st.write(row['fouls'])
+                        with col_fg:
+                            fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
+                            fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
+                            ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
+                            st.write(f"{fg2} | {fg3} | {ft}")
+                        with col_del:
+                            if st.button("🗑️", key=f"del_home_{row['stat_id']}", help="删除这条数据"):
+                                try:
+                                    conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
+                                    conn.commit()
+                                    st.success(f"✅ 已删除 {row['player_name']} 的数据")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ 删除失败：{e}")
+                        
+                        st.divider()
                 else:
                     st.info(f"{m['home_team']} 暂无球员数据")
                 
                 st.divider()
                 
-                # ===== 客队数据表格 =====
+                # ===== 客队数据表格（带删除按钮） =====
                 if not away_stats.empty:
                     st.subheader(f"✈️ {m['away_team']}")
                     
-                    # 计算投篮命中率
-                    away_stats['fg2'] = away_stats.apply(lambda x: f"{x['fg2_made']}/{x['fg2_attempts']}", axis=1)
-                    away_stats['fg3'] = away_stats.apply(lambda x: f"{x['fg3_made']}/{x['fg3_attempts']}", axis=1)
-                    away_stats['ft'] = away_stats.apply(lambda x: f"{x['ft_made']}/{x['ft_attempts']}", axis=1)
+                    # 创建表格列
+                    col_name, col_points, col_reb, col_ast, col_stl, col_blk, col_to, col_fl, col_fg, col_del = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 2, 0.5])
                     
-                    # 选择要显示的列
-                    away_display = away_stats[['player_name', 'points', 'rebounds', 'assists', 
-                                               'steals', 'blocks', 'turnovers', 'fouls', 
-                                               'fg2', 'fg3', 'ft']].copy()
+                    with col_name:
+                        st.write("**球员**")
+                    with col_points:
+                        st.write("**得分**")
+                    with col_reb:
+                        st.write("**篮板**")
+                    with col_ast:
+                        st.write("**助攻**")
+                    with col_stl:
+                        st.write("**抢断**")
+                    with col_blk:
+                        st.write("**盖帽**")
+                    with col_to:
+                        st.write("**失误**")
+                    with col_fl:
+                        st.write("**犯规**")
+                    with col_fg:
+                        st.write("**投篮**")
+                    with col_del:
+                        st.write("**操作**")
                     
-                    away_display.columns = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', 
-                                            '失误', '犯规', '两分', '三分', '罚球']
+                    st.divider()
                     
-                    st.dataframe(away_display, use_container_width=True, hide_index=True)
-                    
-                    # 添加删除按钮（可选）
-                    if st.checkbox(f"显示删除按钮 - {m['away_team']}", key=f"show_del_away_{m['match_id']}"):
-                        for idx, row in away_stats.iterrows():
-                            col_a, col_b = st.columns([5, 1])
-                            with col_a:
-                                st.write(f"{row['player_name']}: {row['points']}分, {row['rebounds']}板, {row['assists']}助")
-                            with col_b:
-                                if st.button("🗑️", key=f"del_stat_{row['stat_id']}", help="删除这条数据"):
-                                    try:
-                                        conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
-                                        conn.commit()
-                                        st.success(f"✅ 已删除 {row['player_name']} 的数据")
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ 删除失败：{e}")
-                            st.divider()
+                    for _, row in away_stats.iterrows():
+                        col_name, col_points, col_reb, col_ast, col_stl, col_blk, col_to, col_fl, col_fg, col_del = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 2, 0.5])
+                        
+                        with col_name:
+                            st.write(row['player_name'])
+                        with col_points:
+                            st.write(row['points'])
+                        with col_reb:
+                            st.write(row['rebounds'])
+                        with col_ast:
+                            st.write(row['assists'])
+                        with col_stl:
+                            st.write(row['steals'])
+                        with col_blk:
+                            st.write(row['blocks'])
+                        with col_to:
+                            st.write(row['turnovers'])
+                        with col_fl:
+                            st.write(row['fouls'])
+                        with col_fg:
+                            fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
+                            fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
+                            ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
+                            st.write(f"{fg2} | {fg3} | {ft}")
+                        with col_del:
+                            if st.button("🗑️", key=f"del_away_{row['stat_id']}", help="删除这条数据"):
+                                try:
+                                    conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
+                                    conn.commit()
+                                    st.success(f"✅ 已删除 {row['player_name']} 的数据")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ 删除失败：{e}")
+                        
+                        st.divider()
                 else:
                     st.info(f"{m['away_team']} 暂无球员数据")
                 
                 st.caption(f"本场共 {len(all_stats_df)} 名球员")
             else:
                 st.info("暂无球员数据")
-
 # ==================== 管理后台 ====================
 elif menu == "⚙️ 管理后台":
     st.header("⚙️ 管理后台")
@@ -875,6 +932,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
