@@ -459,6 +459,33 @@ elif menu == "📋 比赛记录":
     for _, m in matches.iterrows():
         game_type_display = game_type_display_map.get(m['game_type'], m['game_type'])
         
+        # 查询本场比赛的球员数据（用于预览）
+        preview_stats = pd.read_sql(f"""
+            SELECT 
+                p.player_name,
+                ps.is_home,
+                ps.points
+            FROM player_stats ps
+            JOIN players p ON ps.player_id = p.player_id
+            WHERE ps.match_id = {m['match_id']}
+            ORDER BY ps.is_home, ps.points DESC
+        """, conn)
+        
+        # 计算两队总得分和球员名单
+        home_players = []
+        away_players = []
+        home_total = 0
+        away_total = 0
+        
+        if not preview_stats.empty:
+            home_stats = preview_stats[preview_stats['is_home'] == 1]
+            away_stats = preview_stats[preview_stats['is_home'] == 0]
+            
+            home_players = home_stats['player_name'].tolist()
+            away_players = away_stats['player_name'].tolist()
+            home_total = home_stats['points'].sum()
+            away_total = away_stats['points'].sum()
+        
         # 确定获胜方
         winner = ""
         if m['home_win'] and m['away_win']:
@@ -468,8 +495,27 @@ elif menu == "📋 比赛记录":
         elif m['away_win']:
             winner = f"🏆 {m['away_team']} 获胜"
         
-        with st.expander(f"📅 {m['match_date']} {m['match_name']} [{game_type_display}] {m['home_team']} vs {m['away_team']} {winner}"):
-            # 查询本场比赛的所有球员数据
+        # 创建预览文本
+        preview_text = f"📅 {m['match_date']} {m['match_name']} [{game_type_display}]"
+        preview_text += f"\n{m['home_team']} {home_total} : {away_total} {m['away_team']}"
+        if winner:
+            preview_text += f"  {winner}"
+        
+        # 添加球员预览
+        if home_players or away_players:
+            preview_text += "\n\n"
+            if home_players:
+                preview_text += f"🏠 {m['home_team']}: {', '.join(home_players[:3])}"
+                if len(home_players) > 3:
+                    preview_text += f" 等{len(home_players)}人"
+            preview_text += "\n"
+            if away_players:
+                preview_text += f"✈️ {m['away_team']}: {', '.join(away_players[:3])}"
+                if len(away_players) > 3:
+                    preview_text += f" 等{len(away_players)}人"
+        
+        with st.expander(preview_text):
+            # 查询本场比赛的所有球员数据（详细）
             all_stats_df = pd.read_sql(f"""
                 SELECT 
                     ps.stat_id,
@@ -499,7 +545,7 @@ elif menu == "📋 比赛记录":
                 home_stats = all_stats_df[all_stats_df['is_home'] == 1].copy()
                 away_stats = all_stats_df[all_stats_df['is_home'] == 0].copy()
                 
-                # 计算两队总得分
+                # 计算两队总得分（重新计算确保准确）
                 home_total = home_stats['points'].sum() if not home_stats.empty else 0
                 away_total = away_stats['points'].sum() if not away_stats.empty else 0
                 
@@ -517,7 +563,7 @@ elif menu == "📋 比赛记录":
                 if not home_stats.empty:
                     st.subheader(f"🏠 {m['home_team']}")
                     
-                    # 使用HTML/CSS样式让表格更紧凑，数字更大
+                    # 使用HTML/CSS样式让表格更紧凑
                     st.markdown("""
                     <style>
                     .compact-table {
@@ -920,6 +966,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
