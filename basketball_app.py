@@ -351,7 +351,7 @@ elif menu == "📊 球员数据榜":
             st.divider()
             
             # ===== 总数数据表格 =====
-            st.subheader("📊 总数数据")
+            st.subheader("📊 总数据")
             total_df = df[['player_name', 'games', 'total_points', 'total_rebounds', 'total_assists',
                            'total_steals', 'total_blocks', 'total_turnovers', 'total_fouls',
                            'total_fg2_made', 'total_fg2_att', 'total_fg3_made', 'total_fg3_att',
@@ -818,6 +818,7 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
 
 
