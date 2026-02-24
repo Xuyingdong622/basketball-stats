@@ -262,11 +262,13 @@ elif menu == "📊 球员数据榜":
     st.header("📊 球员数据榜")
     
     # 比赛类型筛选
-    game_type_filter = st.selectbox(
-        "🏀 比赛类型",
-        ["全部", "5v5全场", "4v4半场抢分21", "3v3半场抢分21"],
-        index=0
-    )
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        game_type_filter = st.selectbox(
+            "🏀 比赛类型",
+            ["全部", "5v5全场", "4v4半场抢分21", "3v3半场抢分21"],
+            index=0
+        )
     
     # 转换筛选条件
     game_type_map = {
@@ -275,92 +277,96 @@ elif menu == "📊 球员数据榜":
         "3v3半场抢分21": "3v3"
     }
     
-    # 基础查询（所有比赛汇总）
-    st.subheader("📊 基础统计数据")
+    # 构建带筛选的查询
+    where_clause = ""
+    if game_type_filter != "全部":
+        game_type_code = game_type_map[game_type_filter]
+        where_clause = f"AND m.game_type = '{game_type_code}'"
     
-    base_query = """
+    # 查询数据
+    query = f"""
         SELECT 
             p.player_name,
-            COUNT(*) as games,
-            SUM(points) as total_points,
-            ROUND(AVG(points), 1) as avg_points,
-            SUM(rebounds) as total_rebounds,
-            ROUND(AVG(rebounds), 1) as avg_rebounds,
-            SUM(assists) as total_assists,
-            ROUND(AVG(assists), 1) as avg_assists,
-            SUM(steals) as total_steals,
-            ROUND(AVG(steals), 1) as avg_steals,
-            SUM(blocks) as total_blocks,
-            ROUND(AVG(blocks), 1) as avg_blocks,
-            SUM(turnovers) as total_turnovers,
-            ROUND(AVG(turnovers), 1) as avg_turnovers,
-            SUM(fouls) as total_fouls,
-            ROUND(AVG(fouls), 1) as avg_fouls,
-            SUM(fg2_made) as total_fg2_made,
-            ROUND(AVG(fg2_made), 1) as avg_fg2_made,
-            SUM(fg2_attempts) as total_fg2_att,
-            ROUND(AVG(fg2_attempts), 1) as avg_fg2_att,
-            SUM(fg3_made) as total_fg3_made,
-            ROUND(AVG(fg3_made), 1) as avg_fg3_made,
-            SUM(fg3_attempts) as total_fg3_att,
-            ROUND(AVG(fg3_attempts), 1) as avg_fg3_att,
-            SUM(ft_made) as total_ft_made,
-            ROUND(AVG(ft_made), 1) as avg_ft_made,
-            SUM(ft_attempts) as total_ft_att,
-            ROUND(AVG(ft_attempts), 1) as avg_ft_att
+            COUNT(DISTINCT ps.match_id) as games,
+            -- 场均数据
+            ROUND(AVG(ps.points), 1) as avg_points,
+            ROUND(AVG(ps.rebounds), 1) as avg_rebounds,
+            ROUND(AVG(ps.assists), 1) as avg_assists,
+            ROUND(AVG(ps.steals), 1) as avg_steals,
+            ROUND(AVG(ps.blocks), 1) as avg_blocks,
+            ROUND(AVG(ps.turnovers), 1) as avg_turnovers,
+            ROUND(AVG(ps.fouls), 1) as avg_fouls,
+            ROUND(AVG(ps.fg2_made), 1) as avg_fg2_made,
+            ROUND(AVG(ps.fg2_attempts), 1) as avg_fg2_att,
+            ROUND(AVG(ps.fg3_made), 1) as avg_fg3_made,
+            ROUND(AVG(ps.fg3_attempts), 1) as avg_fg3_att,
+            ROUND(AVG(ps.ft_made), 1) as avg_ft_made,
+            ROUND(AVG(ps.ft_attempts), 1) as avg_ft_att,
+            -- 总数数据
+            SUM(ps.points) as total_points,
+            SUM(ps.rebounds) as total_rebounds,
+            SUM(ps.assists) as total_assists,
+            SUM(ps.steals) as total_steals,
+            SUM(ps.blocks) as total_blocks,
+            SUM(ps.turnovers) as total_turnovers,
+            SUM(ps.fouls) as total_fouls,
+            SUM(ps.fg2_made) as total_fg2_made,
+            SUM(ps.fg2_attempts) as total_fg2_att,
+            SUM(ps.fg3_made) as total_fg3_made,
+            SUM(ps.fg3_attempts) as total_fg3_att,
+            SUM(ps.ft_made) as total_ft_made,
+            SUM(ps.ft_attempts) as total_ft_att
         FROM player_stats ps
         JOIN players p ON ps.player_id = p.player_id
+        JOIN matches m ON ps.match_id = m.match_id
+        WHERE 1=1 {where_clause}
         GROUP BY p.player_id
         ORDER BY avg_points DESC
     """
     
     try:
-        df_base = pd.read_sql(base_query, conn)
+        df = pd.read_sql(query, conn)
         
-        if not df_base.empty:
-            # 计算命中率
-            df_base['fg2_pct'] = (df_base['total_fg2_made'] / df_base['total_fg2_att'] * 100).round(1)
-            df_base['fg3_pct'] = (df_base['total_fg3_made'] / df_base['total_fg3_att'] * 100).round(1)
-            df_base['ft_pct'] = (df_base['total_ft_made'] / df_base['total_ft_att'] * 100).round(1)
+        if not df.empty:
+            if game_type_filter != "全部":
+                st.info(f"🏀 当前筛选：{game_type_filter}")
             
-            # 重命名列名用于显示
-            df_base_display = df_base.rename(columns={
-                'player_name': '球员',
-                'games': '场次',
-                'total_points': '总得分',
-                'avg_points': '场均得分',
-                'total_rebounds': '总篮板',
-                'avg_rebounds': '场均篮板',
-                'total_assists': '总助攻',
-                'avg_assists': '场均助攻',
-                'total_steals': '总抢断',
-                'avg_steals': '场均抢断',
-                'total_blocks': '总盖帽',
-                'avg_blocks': '场均盖帽',
-                'total_turnovers': '总失误',
-                'avg_turnovers': '场均失误',
-                'total_fouls': '总犯规',
-                'avg_fouls': '场均犯规',
-                'total_fg2_made': '两分总中',
-                'avg_fg2_made': '场均两分中',
-                'total_fg2_att': '两分总投',
-                'avg_fg2_att': '场均两分投',
-                'total_fg3_made': '三分总中',
-                'avg_fg3_made': '场均三分中',
-                'total_fg3_att': '三分总投',
-                'avg_fg3_att': '场均三分投',
-                'total_ft_made': '罚球总中',
-                'avg_ft_made': '场均罚球中',
-                'total_ft_att': '罚球总投',
-                'avg_ft_att': '场均罚球投',
-                'fg2_pct': '两分%',
-                'fg3_pct': '三分%',
-                'ft_pct': '罚球%'
-            })
-            st.dataframe(df_base_display, use_container_width=True)
-            st.caption(f"📊 总计 {len(df_base)} 名球员")
+            # 计算命中率
+            df['fg2_pct'] = (df['total_fg2_made'] / df['total_fg2_att'] * 100).round(1)
+            df['fg3_pct'] = (df['total_fg3_made'] / df['total_fg3_att'] * 100).round(1)
+            df['ft_pct'] = (df['total_ft_made'] / df['total_ft_att'] * 100).round(1)
+            
+            # ===== 场均数据表格 =====
+            st.subheader("📈 场均数据")
+            avg_df = df[['player_name', 'games', 'avg_points', 'avg_rebounds', 'avg_assists', 
+                         'avg_steals', 'avg_blocks', 'avg_turnovers', 'avg_fouls',
+                         'avg_fg2_made', 'avg_fg2_att', 'avg_fg3_made', 'avg_fg3_att', 
+                         'avg_ft_made', 'avg_ft_att', 'fg2_pct', 'fg3_pct', 'ft_pct']].copy()
+            
+            avg_df.columns = ['球员', '场次', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规',
+                              '两分中', '两分投', '三分中', '三分投', '罚球中', '罚球投',
+                              '两分%', '三分%', '罚球%']
+            st.dataframe(avg_df, use_container_width=True)
+            
+            st.divider()
+            
+            # ===== 总数数据表格 =====
+            st.subheader("📊 总数数据")
+            total_df = df[['player_name', 'games', 'total_points', 'total_rebounds', 'total_assists',
+                           'total_steals', 'total_blocks', 'total_turnovers', 'total_fouls',
+                           'total_fg2_made', 'total_fg2_att', 'total_fg3_made', 'total_fg3_att',
+                           'total_ft_made', 'total_ft_att', 'fg2_pct', 'fg3_pct', 'ft_pct']].copy()
+            
+            total_df.columns = ['球员', '场次', '总得分', '总篮板', '总助攻', '总抢断', '总盖帽', 
+                                '总失误', '总犯规', '两分总中', '两分总投', '三分总中', '三分总投',
+                                '罚球总中', '罚球总投', '两分%', '三分%', '罚球%']
+            st.dataframe(total_df, use_container_width=True)
+            
+            # 统计信息
+            st.caption(f"📊 总计 {len(df)} 名球员，共 {df['games'].sum()} 场比赛")
+            
         else:
-            st.warning("暂无基础数据")
+            st.warning(f"暂无 {game_type_filter} 类型的数据")
             
             # 调试信息
             with st.expander("🔧 调试信息"):
@@ -372,95 +378,12 @@ elif menu == "📊 球员数据榜":
                 st.write(f"📅 比赛数量: {match_count}")
                 st.write(f"📊 统计数据条数: {stats_count}")
                 
-                # 显示原始数据
                 if stats_count > 0:
                     st.write("原始统计数据：")
                     raw_data = pd.read_sql("SELECT * FROM player_stats LIMIT 5", conn)
                     st.dataframe(raw_data)
     except Exception as e:
-        st.error(f"基础查询出错: {e}")
-    
-    st.divider()
-    
-    # 如果基础查询成功，再显示带比赛类型筛选的详细数据
-    if not df_base.empty:
-        st.subheader("🏀 按比赛类型筛选")
-        
-        # 构建带筛选的查询
-        where_clause = ""
-        if game_type_filter != "全部":
-            game_type_code = game_type_map[game_type_filter]
-            where_clause = f"AND m.game_type = '{game_type_code}'"
-        
-        detail_query = f"""
-            SELECT 
-                p.player_name,
-                COUNT(DISTINCT ps.match_id) as games,
-                ROUND(AVG(ps.points), 1) as avg_points,
-                ROUND(AVG(ps.rebounds), 1) as avg_rebounds,
-                ROUND(AVG(ps.assists), 1) as avg_assists,
-                ROUND(AVG(ps.steals), 1) as avg_steals,
-                ROUND(AVG(ps.blocks), 1) as avg_blocks,
-                ROUND(AVG(ps.turnovers), 1) as avg_turnovers,
-                ROUND(AVG(ps.fouls), 1) as avg_fouls,
-                ROUND(AVG(ps.fg2_made), 1) as avg_fg2_made,
-                ROUND(AVG(ps.fg2_attempts), 1) as avg_fg2_att,
-                ROUND(AVG(ps.fg3_made), 1) as avg_fg3_made,
-                ROUND(AVG(ps.fg3_attempts), 1) as avg_fg3_att,
-                ROUND(AVG(ps.ft_made), 1) as avg_ft_made,
-                ROUND(AVG(ps.ft_attempts), 1) as avg_ft_att,
-                SUM(ps.fg2_made) as total_fg2_made,
-                SUM(ps.fg2_attempts) as total_fg2_att,
-                SUM(ps.fg3_made) as total_fg3_made,
-                SUM(ps.fg3_attempts) as total_fg3_att,
-                SUM(ps.ft_made) as total_ft_made,
-                SUM(ps.ft_attempts) as total_ft_att
-            FROM player_stats ps
-            JOIN players p ON ps.player_id = p.player_id
-            JOIN matches m ON ps.match_id = m.match_id
-            WHERE 1=1 {where_clause}
-            GROUP BY p.player_id
-            ORDER BY avg_points DESC
-        """
-        
-        try:
-            df_detail = pd.read_sql(detail_query, conn)
-            
-            if not df_detail.empty:
-                if game_type_filter != "全部":
-                    st.info(f"当前筛选: {game_type_filter}")
-                
-                # 计算命中率
-                df_detail['fg2_pct'] = (df_detail['total_fg2_made'] / df_detail['total_fg2_att'] * 100).round(1)
-                df_detail['fg3_pct'] = (df_detail['total_fg3_made'] / df_detail['total_fg3_att'] * 100).round(1)
-                df_detail['ft_pct'] = (df_detail['total_ft_made'] / df_detail['total_ft_att'] * 100).round(1)
-                
-                # 重命名列名用于显示
-                df_detail_display = df_detail.rename(columns={
-                    'player_name': '球员',
-                    'games': '场次',
-                    'avg_points': '得分',
-                    'avg_rebounds': '篮板',
-                    'avg_assists': '助攻',
-                    'avg_steals': '抢断',
-                    'avg_blocks': '盖帽',
-                    'avg_turnovers': '失误',
-                    'avg_fouls': '犯规',
-                    'avg_fg2_made': '两分中',
-                    'avg_fg2_att': '两分投',
-                    'avg_fg3_made': '三分中',
-                    'avg_fg3_att': '三分投',
-                    'avg_ft_made': '罚球中',
-                    'avg_ft_att': '罚球投',
-                    'fg2_pct': '两分%',
-                    'fg3_pct': '三分%',
-                    'ft_pct': '罚球%'
-                })
-                st.dataframe(df_detail_display, use_container_width=True)
-            else:
-                st.info(f"暂无 {game_type_filter} 类型的数据")
-        except Exception as e:
-            st.error(f"详细查询出错: {e}")
+        st.error(f"查询出错: {e}")
 # ==================== 比赛记录 ====================
 elif menu == "📋 比赛记录":
     st.header("📋 比赛记录")
@@ -895,6 +818,7 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
 
 
