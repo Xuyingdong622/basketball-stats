@@ -130,7 +130,7 @@ conn = sqlite3.connect('basketball.db', check_same_thread=False)
 st.title("小东瓜数据统计系统")
 
 # ========== 侧边栏菜单 ==========
-menu = st.sidebar.selectbox("菜单", ["📝 数据录入", "📊 球员数据榜", "📋 比赛记录", "📝 数据录入", "⚙️ 管理后台"])
+menu = st.sidebar.selectbox("菜单", [ "📊 球员数据榜", "📋 比赛记录", "📝 数据录入", "⚙️ 管理后台"])
 
 # ==================== 数据录入 ====================
 if menu == "📝 数据录入":
@@ -966,6 +966,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
