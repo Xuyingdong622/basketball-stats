@@ -549,8 +549,55 @@ elif menu == "📊 球员数据榜":
     if game_type_filter != "全部":
         game_type_code = game_type_map[game_type_filter]
         where_clause = f"AND m.game_type = '{game_type_code}'"
-
     
+    # ===== 调试信息区域 =====
+    with st.expander("🔧 调试信息 - 查看原始数据"):
+        st.subheader("📊 比赛胜负情况")
+        matches_check = pd.read_sql("""
+            SELECT match_id, 
+                   CASE WHEN home_team_id IS NOT NULL THEN (SELECT team_name FROM teams WHERE team_id = home_team_id) ELSE '队伍1' END as home_team,
+                   CASE WHEN away_team_id IS NOT NULL THEN (SELECT team_name FROM teams WHERE team_id = away_team_id) ELSE '队伍2' END as away_team,
+                   home_manual_score, away_manual_score,
+                   home_win, away_win
+            FROM matches
+            ORDER BY match_date DESC
+        """, conn)
+        st.dataframe(matches_check, use_container_width=True)
+        
+        st.subheader("📊 球员统计数据")
+        stats_check = pd.read_sql("""
+            SELECT ps.stat_id, 
+                   p.player_name, 
+                   CASE WHEN ps.is_home = 1 THEN '主队' ELSE '客队' END as team_type,
+                   ps.match_id,
+                   ps.points,
+                   ps.rebounds,
+                   ps.assists,
+                   ps.steals,
+                   ps.blocks
+            FROM player_stats ps
+            JOIN players p ON ps.player_id = p.player_id
+            ORDER BY ps.match_id, ps.is_home DESC
+        """, conn)
+        st.dataframe(stats_check, use_container_width=True)
+        
+        st.subheader("📊 关联查询测试")
+        join_test = pd.read_sql("""
+            SELECT 
+                p.player_name,
+                m.match_id,
+                m.home_manual_score,
+                m.away_manual_score,
+                m.home_win,
+                m.away_win,
+                ps.is_home,
+                ps.points
+            FROM player_stats ps
+            JOIN players p ON ps.player_id = p.player_id
+            JOIN matches m ON ps.match_id = m.match_id
+            LIMIT 10
+        """, conn)
+        st.dataframe(join_test, use_container_width=True)
     
     # 查询数据（包含胜率计算）
     query = f"""
@@ -647,77 +694,77 @@ elif menu == "📊 球员数据榜":
             st.subheader("🏆 场均数据王")
             
             # 找出各项数据最高的球员
-            top_scorer = df.loc[df['avg_points'].idxmax()]
-            top_rebounder = df.loc[df['avg_rebounds'].idxmax()]
-            top_assister = df.loc[df['avg_assists'].idxmax()]
-            top_stealer = df.loc[df['avg_steals'].idxmax()]
-            top_blocker = df.loc[df['avg_blocks'].idxmax()]
-            
-            # 使用网格布局显示
-            col1, col2, col3, col4, col5 = st.columns(5)
-            
-            with col1:
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                            padding: 15px; border-radius: 10px; text-align: center;">
-                    <h3 style="color: white; margin: 0; font-size: 1.2rem;">🏀 得分王</h3>
-                    <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
-                        {:.1f}
-                    </p>
-                    <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
-                </div>
-                """.format(top_scorer['avg_points'], top_scorer['player_name']), unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                            padding: 15px; border-radius: 10px; text-align: center;">
-                    <h3 style="color: white; margin: 0; font-size: 1.2rem;">📊 篮板王</h3>
-                    <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
-                        {:.1f}
-                    </p>
-                    <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
-                </div>
-                """.format(top_rebounder['avg_rebounds'], top_rebounder['player_name']), unsafe_allow_html=True)
-            
-            with col3:
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                            padding: 15px; border-radius: 10px; text-align: center;">
-                    <h3 style="color: white; margin: 0; font-size: 1.2rem;">🎯 助攻王</h3>
-                    <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
-                        {:.1f}
-                    </p>
-                    <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
-                </div>
-                """.format(top_assister['avg_assists'], top_assister['player_name']), unsafe_allow_html=True)
-            
-            with col4:
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                            padding: 15px; border-radius: 10px; text-align: center;">
-                    <h3 style="color: white; margin: 0; font-size: 1.2rem;">✋ 抢断王</h3>
-                    <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
-                        {:.1f}
-                    </p>
-                    <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
-                </div>
-                """.format(top_stealer['avg_steals'], top_stealer['player_name']), unsafe_allow_html=True)
-            
-            with col5:
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                            padding: 15px; border-radius: 10px; text-align: center;">
-                    <h3 style="color: white; margin: 0; font-size: 1.2rem;">🛡️ 盖帽王</h3>
-                    <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
-                        {:.1f}
-                    </p>
-                    <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
-                </div>
-                """.format(top_blocker['avg_blocks'], top_blocker['player_name']), unsafe_allow_html=True)
-            
-            # 显示胜率王
             if len(df) > 0:
+                top_scorer = df.loc[df['avg_points'].idxmax()]
+                top_rebounder = df.loc[df['avg_rebounds'].idxmax()]
+                top_assister = df.loc[df['avg_assists'].idxmax()]
+                top_stealer = df.loc[df['avg_steals'].idxmax()]
+                top_blocker = df.loc[df['avg_blocks'].idxmax()]
+                
+                # 使用网格布局显示
+                col1, col2, col3, col4, col5 = st.columns(5)
+                
+                with col1:
+                    st.markdown("""
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                padding: 15px; border-radius: 10px; text-align: center;">
+                        <h3 style="color: white; margin: 0; font-size: 1.2rem;">🏀 得分王</h3>
+                        <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
+                            {:.1f}
+                        </p>
+                        <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
+                    </div>
+                    """.format(top_scorer['avg_points'], top_scorer['player_name']), unsafe_allow_html=True)
+                
+                with col2:
+                    st.markdown("""
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                padding: 15px; border-radius: 10px; text-align: center;">
+                        <h3 style="color: white; margin: 0; font-size: 1.2rem;">📊 篮板王</h3>
+                        <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
+                            {:.1f}
+                        </p>
+                        <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
+                    </div>
+                    """.format(top_rebounder['avg_rebounds'], top_rebounder['player_name']), unsafe_allow_html=True)
+                
+                with col3:
+                    st.markdown("""
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                padding: 15px; border-radius: 10px; text-align: center;">
+                        <h3 style="color: white; margin: 0; font-size: 1.2rem;">🎯 助攻王</h3>
+                        <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
+                            {:.1f}
+                        </p>
+                        <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
+                    </div>
+                    """.format(top_assister['avg_assists'], top_assister['player_name']), unsafe_allow_html=True)
+                
+                with col4:
+                    st.markdown("""
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                padding: 15px; border-radius: 10px; text-align: center;">
+                        <h3 style="color: white; margin: 0; font-size: 1.2rem;">✋ 抢断王</h3>
+                        <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
+                            {:.1f}
+                        </p>
+                        <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
+                    </div>
+                    """.format(top_stealer['avg_steals'], top_stealer['player_name']), unsafe_allow_html=True)
+                
+                with col5:
+                    st.markdown("""
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                padding: 15px; border-radius: 10px; text-align: center;">
+                        <h3 style="color: white; margin: 0; font-size: 1.2rem;">🛡️ 盖帽王</h3>
+                        <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
+                            {:.1f}
+                        </p>
+                        <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
+                    </div>
+                    """.format(top_blocker['avg_blocks'], top_blocker['player_name']), unsafe_allow_html=True)
+                
+                # 显示胜率王
                 top_winner = df.loc[df['win_rate'].idxmax()]
                 st.info(f"🏆 胜率王：**{top_winner['player_name']}** {top_winner['win_rate']}% ({top_winner['wins']}胜/{top_winner['games']}场)")
             
@@ -1400,5 +1447,6 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
