@@ -151,9 +151,9 @@ def update_match_results():
                 home_win = 0
                 away_win = 1
             else:
-                # 得分相同，平局
-                home_win = 1
-                away_win = 1
+                # 得分相同，平局（双方都算赢？或者都不算？根据你的需求）
+                home_win = 0
+                away_win = 0  # 平局可以设为0,0或者1,1，根据你的需求
             
             # 更新数据库
             cursor.execute("""
@@ -1447,6 +1447,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
