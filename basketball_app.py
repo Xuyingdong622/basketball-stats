@@ -481,11 +481,15 @@ elif menu == "📊 球员数据榜":
         game_type_code = game_type_map[game_type_filter]
         where_clause = f"AND m.game_type = '{game_type_code}'"
     
-    # 查询数据
+    # 查询数据（包含胜率计算）
     query = f"""
         SELECT 
             p.player_name,
             COUNT(DISTINCT ps.match_id) as games,
+            -- 胜率计算：统计球员所在队伍获胜的比赛
+            SUM(CASE 
+                WHEN (ps.is_home = 1 AND m.home_win = 1) OR (ps.is_home = 0 AND m.away_win = 1) 
+                THEN 1 ELSE 0 END) as wins,
             -- 场均数据
             ROUND(AVG(ps.points), 1) as avg_points,
             ROUND(AVG(ps.rebounds), 1) as avg_rebounds,
@@ -529,39 +533,68 @@ elif menu == "📊 球员数据榜":
             if game_type_filter != "全部":
                 st.info(f"🏀 当前筛选：{game_type_filter}")
             
-            # 计算命中率
+            # 计算命中率和胜率
             df['fg2_pct'] = (df['total_fg2_made'] / df['total_fg2_att'] * 100).round(1)
             df['fg3_pct'] = (df['total_fg3_made'] / df['total_fg3_att'] * 100).round(1)
             df['ft_pct'] = (df['total_ft_made'] / df['total_ft_att'] * 100).round(1)
+            df['win_rate'] = (df['wins'] / df['games'] * 100).round(1)
             
-            # ===== 场均数据表格 =====
+            # 添加胜率排名
+            df['win_rank'] = df['win_rate'].rank(ascending=False, method='min').astype(int)
+            
+            # ===== 场均数据表格（包含胜率） =====
             st.subheader("📈 场均数据")
-            avg_df = df[['player_name', 'games', 'avg_points', 'avg_rebounds', 'avg_assists', 
+            avg_df = df[['player_name', 'games', 'wins', 'win_rate', 'win_rank',
+                         'avg_points', 'avg_rebounds', 'avg_assists', 
                          'avg_steals', 'avg_blocks', 'avg_turnovers', 'avg_fouls',
                          'avg_fg2_made', 'avg_fg2_att', 'avg_fg3_made', 'avg_fg3_att', 
                          'avg_ft_made', 'avg_ft_att', 'fg2_pct', 'fg3_pct', 'ft_pct']].copy()
             
-            avg_df.columns = ['球员', '场次', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规',
+            avg_df.columns = ['球员', '场次', '胜场', '胜率%', '胜率排名',
+                              '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规',
                               '两分中', '两分投', '三分中', '三分投', '罚球中', '罚球投',
                               '两分%', '三分%', '罚球%']
             st.dataframe(avg_df, use_container_width=True)
             
             st.divider()
             
-            # ===== 总数数据表格 =====
+            # ===== 总数数据表格（包含胜率） =====
             st.subheader("📊 总数数据")
-            total_df = df[['player_name', 'games', 'total_points', 'total_rebounds', 'total_assists',
+            total_df = df[['player_name', 'games', 'wins', 'win_rate', 'win_rank',
+                           'total_points', 'total_rebounds', 'total_assists',
                            'total_steals', 'total_blocks', 'total_turnovers', 'total_fouls',
                            'total_fg2_made', 'total_fg2_att', 'total_fg3_made', 'total_fg3_att',
                            'total_ft_made', 'total_ft_att', 'fg2_pct', 'fg3_pct', 'ft_pct']].copy()
             
-            total_df.columns = ['球员', '场次', '总得分', '总篮板', '总助攻', '总抢断', '总盖帽', 
+            total_df.columns = ['球员', '场次', '胜场', '胜率%', '胜率排名',
+                                '总得分', '总篮板', '总助攻', '总抢断', '总盖帽', 
                                 '总失误', '总犯规', '两分总中', '两分总投', '三分总中', '三分总投',
                                 '罚球总中', '罚球总投', '两分%', '三分%', '罚球%']
             st.dataframe(total_df, use_container_width=True)
             
+            # ===== 胜率排行榜 =====
+            st.subheader("🏆 胜率排行榜")
+            
+            # 按胜率排序
+            win_rate_df = df[['player_name', 'games', 'wins', 'win_rate']].copy()
+            win_rate_df = win_rate_df.sort_values('win_rate', ascending=False)
+            win_rate_df.columns = ['球员', '场次', '胜场', '胜率%']
+            
+            # 添加奖牌emoji
+            win_rate_df.insert(0, '排名', range(1, len(win_rate_df) + 1))
+            win_rate_df['排名'] = win_rate_df['排名'].apply(
+                lambda x: '🥇' if x == 1 else ('🥈' if x == 2 else ('🥉' if x == 3 else str(x)))
+            )
+            
+            st.dataframe(win_rate_df, use_container_width=True)
+            
             # 统计信息
             st.caption(f"📊 总计 {len(df)} 名球员，共 {df['games'].sum()} 场比赛")
+            
+            # 显示胜率最高的球员
+            if len(df) > 0:
+                top_player = df.loc[df['win_rate'].idxmax()]
+                st.success(f"🏆 胜率王：**{top_player['player_name']}** 胜率 {top_player['win_rate']}% ({top_player['wins']}胜/{top_player['games']}场)")
             
         else:
             st.warning(f"暂无 {game_type_filter} 类型的数据")
@@ -582,7 +615,6 @@ elif menu == "📊 球员数据榜":
                     st.dataframe(raw_data)
     except Exception as e:
         st.error(f"查询出错: {e}")
-
 # ==================== 比赛记录 ====================
 elif menu == "📋 比赛记录":
     st.header("📋 比赛记录")
@@ -1246,3 +1278,4 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
