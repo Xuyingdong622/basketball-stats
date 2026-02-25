@@ -4,7 +4,132 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 import os
+import pickle  
+import shutil  
+from pathlib import Path  
 
+# ========== 数据持久化配置 ==========
+BACKUP_DIR = "backups"
+DATA_BACKUP_FILE = "data_backup.pkl"
+DB_FILE = "basketball.db"
+
+# 创建备份目录
+if not os.path.exists(BACKUP_DIR):
+    os.makedirs(BACKUP_DIR)
+
+# ========== 数据持久化函数 ==========
+def save_data():
+    """保存所有数据到pickle文件"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        
+        # 读取所有表数据
+        tables = ['teams', 'players', 'matches', 'player_stats']
+        data = {}
+        for table in tables:
+            try:
+                data[table] = pd.read_sql(f"SELECT * FROM {table}", conn)
+            except:
+                data[table] = pd.DataFrame()  # 如果表不存在，创建空DataFrame
+        
+        # 保存到主备份文件
+        with open(DATA_BACKUP_FILE, 'wb') as f:
+            pickle.dump(data, f)
+        
+        # 创建时间戳备份
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_file = os.path.join(BACKUP_DIR, f"backup_{timestamp}.pkl")
+        with open(backup_file, 'wb') as f:
+            pickle.dump(data, f)
+        
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"❌ 保存数据失败: {e}")
+        return False
+
+def load_data():
+    """从pickle文件恢复数据"""
+    try:
+        if not os.path.exists(DATA_BACKUP_FILE):
+            return False
+        
+        with open(DATA_BACKUP_FILE, 'rb') as f:
+            data = pickle.load(f)
+        
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # 清空现有数据（但保留表结构）
+        tables = ['player_stats', 'matches', 'players', 'teams']
+        for table in tables:
+            try:
+                cursor.execute(f"DELETE FROM {table}")
+            except:
+                pass
+        
+        # 恢复数据
+        for table, df in data.items():
+            if not df.empty:
+                df.to_sql(table, conn, if_exists='append', index=False)
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"恢复数据失败: {e}")
+        return False
+
+def list_backups():
+    """列出所有可用的备份"""
+    backups = []
+    if os.path.exists(BACKUP_DIR):
+        for file in os.listdir(BACKUP_DIR):
+            if file.startswith("backup_") and file.endswith(".pkl"):
+                backups.append(file)
+    return sorted(backups, reverse=True)
+
+def restore_from_backup(backup_file):
+    """从指定备份文件恢复数据"""
+    try:
+        backup_path = os.path.join(BACKUP_DIR, backup_file)
+        with open(backup_path, 'rb') as f:
+            data = pickle.load(f)
+        
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # 清空现有数据
+        tables = ['player_stats', 'matches', 'players', 'teams']
+        for table in tables:
+            try:
+                cursor.execute(f"DELETE FROM {table}")
+            except:
+                pass
+        
+        # 恢复数据
+        for table, df in data.items():
+            if not df.empty:
+                df.to_sql(table, conn, if_exists='append', index=False)
+        
+        conn.commit()
+        conn.close()
+        
+        # 同时也更新主备份文件
+        with open(DATA_BACKUP_FILE, 'wb') as f:
+            pickle.dump(data, f)
+        
+        return True
+    except Exception as e:
+        st.error(f"❌ 恢复失败: {e}")
+        return False
+
+# ========== 应用启动时自动恢复数据 ==========
+if os.path.exists(DATA_BACKUP_FILE):
+    if load_data():
+        print("✅ 数据自动恢复成功")
+    else:
+        print("⚠️ 数据恢复失败")
 # ========== 数据库初始化函数 ==========
 def init_database():
     """初始化数据库表结构"""
@@ -181,6 +306,7 @@ if menu == "📝 数据录入":
             conn.execute("UPDATE matches SET home_win = ?, away_win = ? WHERE match_id = ?",
                         (1 if home_win else 0, 1 if away_win else 0, match_id))
             conn.commit()
+            save_data()  # ✅ 新增：保存数据
             st.success("✅ 比赛结果已更新")
             st.rerun()
         
@@ -267,7 +393,7 @@ if menu == "📝 数据录入":
                 turnovers = st.number_input("失误", 0, 20, value=int(default_values['turnovers']) if default_values else 0, key="to")
                 fouls = st.number_input("犯规", 0, 6, value=int(default_values['fouls']) if default_values else 0, key="fls")
             
-            # 保存按钮
+           # 保存按钮
             if st.button("💾 保存数据", type="primary"):
                 try:
                     # 确保所有ID都是整数
@@ -287,6 +413,7 @@ if menu == "📝 数据录入":
                               fg2_m, fg2_a, fg3_m, fg3_a, ft_m, ft_a, is_home_value,
                               player_id, match_id_int))
                         conn.commit()
+                        save_data()  # ✅ 新增：保存数据
                         st.success("✅ 数据更新成功！")
                         st.balloons()
                     else:
@@ -299,6 +426,7 @@ if menu == "📝 数据录入":
                         """, (player_id, match_id_int, total_points, rebounds, assists, steals, blocks, turnovers, fouls,
                               fg2_m, fg2_a, fg3_m, fg3_a, ft_m, ft_a, is_home_value))
                         conn.commit()
+                        save_data()  # ✅ 新增：保存数据
                         st.success("✅ 数据保存成功！")
                         st.balloons()
                     
@@ -625,6 +753,7 @@ elif menu == "📋 比赛记录":
                                 try:
                                     conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
                                     conn.commit()
+                                    save_data()  # ✅ 新增：保存数据
                                     st.success(f"✅ 已删除 {row['player_name']} 的数据")
                                     st.rerun()
                                 except Exception as e:
@@ -676,6 +805,7 @@ elif menu == "📋 比赛记录":
                                 try:
                                     conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
                                     conn.commit()
+                                    save_data()  # ✅ 新增：保存数据
                                     st.success(f"✅ 已删除 {row['player_name']} 的数据")
                                     st.rerun()
                                 except Exception as e:
@@ -748,11 +878,12 @@ elif menu == "⚙️ 管理后台":
                             try:
                                 conn.execute("DELETE FROM teams WHERE team_id = ?", (row['team_id'],))
                                 conn.commit()
+                                save_data()  # ✅ 新增：保存数据
                                 st.success(f"球队 {row['team_name']} 已删除")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"删除失败：{e}")
-                
+                                    
                 st.divider()
             
             st.caption(f"总计 {len(teams_df)} 支球队")
@@ -816,6 +947,7 @@ elif menu == "⚙️ 管理后台":
                             try:
                                 conn.execute("DELETE FROM players WHERE player_id = ?", (row['player_id'],))
                                 conn.commit()
+                                save_data()  # ✅ 新增：保存数据
                                 st.success(f"球员 {row['player_name']} 已删除")
                                 st.rerun()
                             except Exception as e:
@@ -953,6 +1085,7 @@ elif menu == "⚙️ 管理后台":
                             try:
                                 conn.execute("DELETE FROM matches WHERE match_id = ?", (row['match_id'],))
                                 conn.commit()
+                                save_data()  # ✅ 新增：保存数据
                                 st.success(f"比赛已删除")
                                 st.rerun()
                             except Exception as e:
@@ -966,6 +1099,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
