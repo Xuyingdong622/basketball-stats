@@ -43,6 +43,10 @@ def save_data():
             pickle.dump(data, f)
         
         conn.close()
+        
+        # 自动更新比赛胜负
+        update_match_results()
+        
         return True
     except Exception as e:
         st.error(f"❌ 保存数据失败: {e}")
@@ -122,6 +126,39 @@ def restore_from_backup(backup_file):
         return True
     except Exception as e:
         st.error(f"❌ 恢复失败: {e}")
+        return False
+
+# ========== 自动更新比赛胜负 ==========
+def update_match_results():
+    """根据比赛得分自动更新胜负结果"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # 获取所有比赛
+        cursor.execute("""
+            SELECT match_id, home_manual_score, away_manual_score 
+            FROM matches
+        """)
+        matches = cursor.fetchall()
+        
+        for match_id, home_score, away_score in matches:
+            # 根据得分判断胜负
+            home_win = 1 if home_score > away_score else 0
+            away_win = 1 if away_score > home_score else 0
+            
+            # 更新数据库
+            cursor.execute("""
+                UPDATE matches 
+                SET home_win = ?, away_win = ? 
+                WHERE match_id = ?
+            """, (home_win, away_win, match_id))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"更新胜负失败: {e}")
         return False
 
 # ========== 应用启动时自动恢复数据 ==========
@@ -314,23 +351,6 @@ if menu == "📝 数据录入":
         selected_idx = match_options.index(selected_match)
         match_data = matches.iloc[selected_idx]
         match_id = int(match_data['match_id'])
-        
-        # 显示比赛胜负设置
-        st.subheader("🏆 比赛结果")
-        col_win1, col_win2 = st.columns(2)
-        with col_win1:
-            home_win = st.checkbox(f"{match_data['home_team']} 获胜", key="home_win")
-        with col_win2:
-            away_win = st.checkbox(f"{match_data['away_team']} 获胜", key="away_win")
-        
-        # 更新比赛胜负
-        if st.button("更新比赛结果", key="update_match_result"):
-            conn.execute("UPDATE matches SET home_win = ?, away_win = ? WHERE match_id = ?",
-                        (1 if home_win else 0, 1 if away_win else 0, match_id))
-            conn.commit()
-            save_data()
-            st.success("✅ 比赛结果已更新")
-            st.rerun()
         
         st.divider()
         
@@ -539,18 +559,15 @@ elif menu == "📊 球员数据榜":
             df['ft_pct'] = (df['total_ft_made'] / df['total_ft_att'] * 100).round(1)
             df['win_rate'] = (df['wins'] / df['games'] * 100).round(1)
             
-            # 添加胜率排名
-            df['win_rank'] = df['win_rate'].rank(ascending=False, method='min').astype(int)
-            
             # ===== 场均数据表格（包含胜率） =====
             st.subheader("📈 场均数据")
-            avg_df = df[['player_name', 'games', 'wins', 'win_rate', 'win_rank',
+            avg_df = df[['player_name', 'games', 'wins', 'win_rate',
                          'avg_points', 'avg_rebounds', 'avg_assists', 
                          'avg_steals', 'avg_blocks', 'avg_turnovers', 'avg_fouls',
                          'avg_fg2_made', 'avg_fg2_att', 'avg_fg3_made', 'avg_fg3_att', 
                          'avg_ft_made', 'avg_ft_att', 'fg2_pct', 'fg3_pct', 'ft_pct']].copy()
             
-            avg_df.columns = ['球员', '场次', '胜场', '胜率%', '胜率排名',
+            avg_df.columns = ['球员', '场次', '胜场', '胜率%',
                               '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规',
                               '两分中', '两分投', '三分中', '三分投', '罚球中', '罚球投',
                               '两分%', '三分%', '罚球%']
@@ -560,41 +577,98 @@ elif menu == "📊 球员数据榜":
             
             # ===== 总数数据表格（包含胜率） =====
             st.subheader("📊 总数数据")
-            total_df = df[['player_name', 'games', 'wins', 'win_rate', 'win_rank',
+            total_df = df[['player_name', 'games', 'wins', 'win_rate',
                            'total_points', 'total_rebounds', 'total_assists',
                            'total_steals', 'total_blocks', 'total_turnovers', 'total_fouls',
                            'total_fg2_made', 'total_fg2_att', 'total_fg3_made', 'total_fg3_att',
                            'total_ft_made', 'total_ft_att', 'fg2_pct', 'fg3_pct', 'ft_pct']].copy()
             
-            total_df.columns = ['球员', '场次', '胜场', '胜率%', '胜率排名',
+            total_df.columns = ['球员', '场次', '胜场', '胜率%',
                                 '总得分', '总篮板', '总助攻', '总抢断', '总盖帽', 
                                 '总失误', '总犯规', '两分总中', '两分总投', '三分总中', '三分总投',
                                 '罚球总中', '罚球总投', '两分%', '三分%', '罚球%']
             st.dataframe(total_df, use_container_width=True)
             
-            # ===== 胜率排行榜 =====
-            st.subheader("🏆 胜率排行榜")
-            
-            # 按胜率排序
-            win_rate_df = df[['player_name', 'games', 'wins', 'win_rate']].copy()
-            win_rate_df = win_rate_df.sort_values('win_rate', ascending=False)
-            win_rate_df.columns = ['球员', '场次', '胜场', '胜率%']
-            
-            # 添加奖牌emoji
-            win_rate_df.insert(0, '排名', range(1, len(win_rate_df) + 1))
-            win_rate_df['排名'] = win_rate_df['排名'].apply(
-                lambda x: '🥇' if x == 1 else ('🥈' if x == 2 else ('🥉' if x == 3 else str(x)))
-            )
-            
-            st.dataframe(win_rate_df, use_container_width=True)
-            
             # 统计信息
             st.caption(f"📊 总计 {len(df)} 名球员，共 {df['games'].sum()} 场比赛")
             
-            # 显示胜率最高的球员
+            # ===== 各项数据王 =====
+            st.subheader("🏆 场均数据王")
+            
+            # 找出各项数据最高的球员
+            top_scorer = df.loc[df['avg_points'].idxmax()]
+            top_rebounder = df.loc[df['avg_rebounds'].idxmax()]
+            top_assister = df.loc[df['avg_assists'].idxmax()]
+            top_stealer = df.loc[df['avg_steals'].idxmax()]
+            top_blocker = df.loc[df['avg_blocks'].idxmax()]
+            
+            # 使用网格布局显示
+            col1, col2, col3, col4, col5 = st.columns(5)
+            
+            with col1:
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            padding: 15px; border-radius: 10px; text-align: center;">
+                    <h3 style="color: white; margin: 0; font-size: 1.2rem;">🏀 得分王</h3>
+                    <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
+                        {:.1f}
+                    </p>
+                    <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
+                </div>
+                """.format(top_scorer['avg_points'], top_scorer['player_name']), unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            padding: 15px; border-radius: 10px; text-align: center;">
+                    <h3 style="color: white; margin: 0; font-size: 1.2rem;">📊 篮板王</h3>
+                    <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
+                        {:.1f}
+                    </p>
+                    <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
+                </div>
+                """.format(top_rebounder['avg_rebounds'], top_rebounder['player_name']), unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            padding: 15px; border-radius: 10px; text-align: center;">
+                    <h3 style="color: white; margin: 0; font-size: 1.2rem;">🎯 助攻王</h3>
+                    <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
+                        {:.1f}
+                    </p>
+                    <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
+                </div>
+                """.format(top_assister['avg_assists'], top_assister['player_name']), unsafe_allow_html=True)
+            
+            with col4:
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            padding: 15px; border-radius: 10px; text-align: center;">
+                    <h3 style="color: white; margin: 0; font-size: 1.2rem;">✋ 抢断王</h3>
+                    <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
+                        {:.1f}
+                    </p>
+                    <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
+                </div>
+                """.format(top_stealer['avg_steals'], top_stealer['player_name']), unsafe_allow_html=True)
+            
+            with col5:
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            padding: 15px; border-radius: 10px; text-align: center;">
+                    <h3 style="color: white; margin: 0; font-size: 1.2rem;">🛡️ 盖帽王</h3>
+                    <p style="color: white; font-size: 1.5rem; margin: 5px 0; font-weight: bold;">
+                        {:.1f}
+                    </p>
+                    <p style="color: white; margin: 0; font-size: 1rem;">{}</p>
+                </div>
+                """.format(top_blocker['avg_blocks'], top_blocker['player_name']), unsafe_allow_html=True)
+            
+            # 显示胜率王
             if len(df) > 0:
-                top_player = df.loc[df['win_rate'].idxmax()]
-                st.success(f"🏆 胜率王：**{top_player['player_name']}** 胜率 {top_player['win_rate']}% ({top_player['wins']}胜/{top_player['games']}场)")
+                top_winner = df.loc[df['win_rate'].idxmax()]
+                st.info(f"🏆 胜率王：**{top_winner['player_name']}** {top_winner['win_rate']}% ({top_winner['wins']}胜/{top_winner['games']}场)")
             
         else:
             st.warning(f"暂无 {game_type_filter} 类型的数据")
@@ -615,6 +689,7 @@ elif menu == "📊 球员数据榜":
                     st.dataframe(raw_data)
     except Exception as e:
         st.error(f"查询出错: {e}")
+
 # ==================== 比赛记录 ====================
 elif menu == "📋 比赛记录":
     st.header("📋 比赛记录")
@@ -679,22 +754,14 @@ elif menu == "📋 比赛记录":
         home_score_source = "📊 球员数据" if home_players_total > 0 else "✏️ 手动输入" if m['home_manual_score'] > 0 else "⭕ 无数据"
         away_score_source = "📊 球员数据" if away_players_total > 0 else "✏️ 手动输入" if m['away_manual_score'] > 0 else "⭕ 无数据"
         
-        # 确定获胜方
+        # 确定获胜方（自动判断）
         winner = ""
-        if m['home_win'] and m['away_win']:
-            winner = "🤝 平局"
-        elif m['home_win']:
+        if home_final_score > away_final_score:
             winner = f"🏆 {m['home_team']} 获胜"
-        elif m['away_win']:
+        elif away_final_score > home_final_score:
             winner = f"🏆 {m['away_team']} 获胜"
-        else:
-            # 如果没有设置获胜方，根据得分自动判断
-            if home_final_score > away_final_score:
-                winner = f"🏆 {m['home_team']} 获胜（自动）"
-            elif away_final_score > home_final_score:
-                winner = f"🏆 {m['away_team']} 获胜（自动）"
-            elif home_final_score > 0 and home_final_score == away_final_score:
-                winner = "🤝 平局（自动）"
+        elif home_final_score > 0 and home_final_score == away_final_score:
+            winner = "🤝 平局"
         
         # 创建预览文本
         preview_text = f"📅 {m['match_date']} {m['match_name']} [{game_type_display}]"
@@ -1116,8 +1183,8 @@ elif menu == "⚙️ 管理后台":
                     index=1 if len(team_options) > 1 else 0
                 )
             
-            # 新增：手动得分输入
-            st.subheader("📊 队伍得分（可选）")
+            # 手动得分输入
+            st.subheader("📊 队伍得分")
             st.caption("如果之后会录入球员数据，可以留空；如果没有球员数据，请填写")
             
             # 获取选择的球队名称用于显示
@@ -1143,12 +1210,16 @@ elif menu == "⚙️ 管理后台":
                     st.error("主队和客队不能相同")
                 else:
                     try:
+                        # 根据得分自动判断胜负
+                        home_win = 1 if home_manual_score > away_manual_score else 0
+                        away_win = 1 if away_manual_score > home_manual_score else 0
+                        
                         conn.execute("""
                             INSERT INTO matches (match_date, match_name, game_type, home_team_id, away_team_id,
-                                                home_manual_score, away_manual_score)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                                home_manual_score, away_manual_score, home_win, away_win)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (match_date, match_name, game_type, home_team, away_team, 
-                              home_manual_score, away_manual_score))
+                              home_manual_score, away_manual_score, home_win, away_win))
                         conn.commit()
                         save_data()
                         st.success(f"✅ 比赛创建成功：{match_date} {match_name}")
@@ -1278,4 +1349,3 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
-
