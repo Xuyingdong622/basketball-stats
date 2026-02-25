@@ -613,6 +613,12 @@ elif menu == "📋 比赛记录":
             away_players = away_stats['player_name'].tolist()
             home_total = home_stats['points'].sum()
             away_total = away_stats['points'].sum()
+        else:
+            # 如果没有球员数据，显示提示
+            home_players = []
+            away_players = []
+            home_total = 0
+            away_total = 0
         
         # 确定获胜方
         winner = ""
@@ -641,6 +647,8 @@ elif menu == "📋 比赛记录":
                 preview_text += f"✈️ {m['away_team']}: {', '.join(away_players[:3])}"
                 if len(away_players) > 3:
                     preview_text += f" 等{len(away_players)}人"
+        else:
+            preview_text += "\n\n⚠️ 暂无球员数据"
         
         with st.expander(preview_text):
             # 查询本场比赛的所有球员数据（详细）
@@ -673,9 +681,34 @@ elif menu == "📋 比赛记录":
                 home_stats = all_stats_df[all_stats_df['is_home'] == 1].copy()
                 away_stats = all_stats_df[all_stats_df['is_home'] == 0].copy()
                 
-                # 计算两队总得分（重新计算确保准确）
+                # 计算两队总得分
                 home_total = home_stats['points'].sum() if not home_stats.empty else 0
                 away_total = away_stats['points'].sum() if not away_stats.empty else 0
+                
+                # ===== 新增：如果没有客队数据，但主队有数据，创建虚拟行 =====
+                show_away_virtual = False
+                if away_stats.empty and home_total > 0:
+                    show_away_virtual = True
+                    # 创建虚拟客队数据
+                    virtual_away = pd.DataFrame([{
+                        'stat_id': -1,  # 虚拟ID
+                        'player_name': '👥 客队合计（待录入）',
+                        'is_home': 0,
+                        'points': 0,  # 客队得分设为0，因为不知道实际得分
+                        'rebounds': 0,
+                        'assists': 0,
+                        'steals': 0,
+                        'blocks': 0,
+                        'turnovers': 0,
+                        'fouls': 0,
+                        'fg2_made': 0,
+                        'fg2_attempts': 0,
+                        'fg3_made': 0,
+                        'fg3_attempts': 0,
+                        'ft_made': 0,
+                        'ft_attempts': 0
+                    }])
+                    away_stats = pd.concat([away_stats, virtual_away], ignore_index=True)
                 
                 col1, col2, col3 = st.columns(3)
                 with col1:
@@ -685,37 +718,21 @@ elif menu == "📋 比赛记录":
                 with col3:
                     st.metric("分差", abs(home_total - away_total))
                 
+                # 如果使用了虚拟数据，显示提示
+                if show_away_virtual:
+                    st.warning(f"⚠️ {m['away_team']} 暂无球员数据，请录入客队球员数据")
+                    # 添加快速录入按钮
+                    if st.button(f"快速录入 {m['away_team']} 数据", key=f"quick_add_{m['match_id']}"):
+                        # 跳转到数据录入页面并预选该比赛
+                        st.session_state['quick_match_id'] = m['match_id']
+                        st.session_state['quick_team'] = 'away'
+                        st.info("请前往「数据录入」页面录入数据")
+                
                 st.markdown("---")
                 
                 # ===== 主队数据表格 =====
                 if not home_stats.empty:
                     st.subheader(f"🏠 {m['home_team']}")
-                    
-                    # 使用HTML/CSS样式让表格更紧凑
-                    st.markdown("""
-                    <style>
-                    .compact-table {
-                        font-size: 16px;
-                        line-height: 1.2;
-                        margin-bottom: 5px;
-                    }
-                    .compact-table th {
-                        background-color: #f0f2f6;
-                        padding: 4px 8px;
-                        text-align: center;
-                        font-weight: 600;
-                    }
-                    .compact-table td {
-                        padding: 2px 8px;
-                        text-align: center;
-                    }
-                    .delete-btn {
-                        color: #ff4b4b;
-                        cursor: pointer;
-                        font-size: 18px;
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
                     
                     # 创建表头
                     cols = st.columns([2, 1, 1, 1, 1, 1, 1, 1, 2.5, 0.8])
@@ -753,7 +770,7 @@ elif menu == "📋 比赛记录":
                                 try:
                                     conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
                                     conn.commit()
-                                    save_data()  # ✅ 新增：保存数据
+                                    save_data()
                                     st.success(f"✅ 已删除 {row['player_name']} 的数据")
                                     st.rerun()
                                 except Exception as e:
@@ -784,32 +801,49 @@ elif menu == "📋 比赛记录":
                         # 球员名
                         cols[0].markdown(f"**{row['player_name']}**")
                         
-                        # 基础数据
-                        cols[1].markdown(f"**{row['points']}**")
-                        cols[2].markdown(f"**{row['rebounds']}**")
-                        cols[3].markdown(f"**{row['assists']}**")
-                        cols[4].markdown(f"**{row['steals']}**")
-                        cols[5].markdown(f"**{row['blocks']}**")
-                        cols[6].markdown(f"**{row['turnovers']}**")
-                        cols[7].markdown(f"**{row['fouls']}**")
+                        # 检查是否是虚拟数据
+                        is_virtual = (row['stat_id'] == -1)
                         
-                        # 投篮数据
-                        fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
-                        fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
-                        ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
-                        cols[8].markdown(f"**{fg2}** | **{fg3}** | **{ft}**")
-                        
-                        # 删除按钮
-                        with cols[9]:
-                            if st.button("🗑️", key=f"del_away_{row['stat_id']}", help="删除这条数据"):
-                                try:
-                                    conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
-                                    conn.commit()
-                                    save_data()  # ✅ 新增：保存数据
-                                    st.success(f"✅ 已删除 {row['player_name']} 的数据")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ 删除失败：{e}")
+                        if is_virtual:
+                            # 虚拟数据只显示提示信息
+                            cols[1].markdown(f"**-**")
+                            cols[2].markdown(f"**-**")
+                            cols[3].markdown(f"**-**")
+                            cols[4].markdown(f"**-**")
+                            cols[5].markdown(f"**-**")
+                            cols[6].markdown(f"**-**")
+                            cols[7].markdown(f"**-**")
+                            cols[8].markdown(f"**待录入**")
+                            # 虚拟数据不显示删除按钮
+                            with cols[9]:
+                                st.write(" ")
+                        else:
+                            # 真实数据正常显示
+                            cols[1].markdown(f"**{row['points']}**")
+                            cols[2].markdown(f"**{row['rebounds']}**")
+                            cols[3].markdown(f"**{row['assists']}**")
+                            cols[4].markdown(f"**{row['steals']}**")
+                            cols[5].markdown(f"**{row['blocks']}**")
+                            cols[6].markdown(f"**{row['turnovers']}**")
+                            cols[7].markdown(f"**{row['fouls']}**")
+                            
+                            # 投篮数据
+                            fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
+                            fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
+                            ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
+                            cols[8].markdown(f"**{fg2}** | **{fg3}** | **{ft}**")
+                            
+                            # 删除按钮
+                            with cols[9]:
+                                if st.button("🗑️", key=f"del_away_{row['stat_id']}", help="删除这条数据"):
+                                    try:
+                                        conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
+                                        conn.commit()
+                                        save_data()
+                                        st.success(f"✅ 已删除 {row['player_name']} 的数据")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ 删除失败：{e}")
                         
                         st.markdown("---")
                 else:
@@ -1138,6 +1172,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
