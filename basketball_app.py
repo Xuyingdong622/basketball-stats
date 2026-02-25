@@ -144,8 +144,16 @@ def update_match_results():
         
         for match_id, home_score, away_score in matches:
             # 根据得分判断胜负
-            home_win = 1 if home_score > away_score else 0
-            away_win = 1 if away_score > home_score else 0
+            if home_score > away_score:
+                home_win = 1
+                away_win = 0
+            elif away_score > home_score:
+                home_win = 0
+                away_win = 1
+            else:
+                # 得分相同，平局
+                home_win = 1
+                away_win = 1
             
             # 更新数据库
             cursor.execute("""
@@ -156,6 +164,7 @@ def update_match_results():
         
         conn.commit()
         conn.close()
+        print("✅ 胜负更新成功")
         return True
     except Exception as e:
         print(f"更新胜负失败: {e}")
@@ -435,46 +444,85 @@ if menu == "📝 数据录入":
                 turnovers = st.number_input("失误", 0, 20, value=int(default_values['turnovers']) if default_values else 0, key="to")
                 fouls = st.number_input("犯规", 0, 6, value=int(default_values['fouls']) if default_values else 0, key="fls")
             
-            # 保存按钮
-            if st.button("💾 保存数据", type="primary"):
-                try:
-                    # 确保所有ID都是整数
-                    player_id = int(selected_player)
-                    match_id_int = int(match_id)
-                    
-                    if existing_data:
-                        # 更新现有数据
-                        cursor.execute("""
-                            UPDATE player_stats 
-                            SET points = ?, rebounds = ?, assists = ?, steals = ?, blocks = ?, 
-                                turnovers = ?, fouls = ?, fg2_made = ?, fg2_attempts = ?, 
-                                fg3_made = ?, fg3_attempts = ?, ft_made = ?, ft_attempts = ?,
-                                is_home = ?
-                            WHERE player_id = ? AND match_id = ?
-                        """, (total_points, rebounds, assists, steals, blocks, turnovers, fouls,
-                              fg2_m, fg2_a, fg3_m, fg3_a, ft_m, ft_a, is_home_value,
-                              player_id, match_id_int))
-                        conn.commit()
-                        save_data()
-                        st.success("✅ 数据更新成功！")
-                        st.balloons()
-                    else:
-                        # 插入新数据
-                        cursor.execute("""
-                            INSERT INTO player_stats 
-                            (player_id, match_id, points, rebounds, assists, steals, blocks, turnovers, fouls,
-                             fg2_made, fg2_attempts, fg3_made, fg3_attempts, ft_made, ft_attempts, is_home)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (player_id, match_id_int, total_points, rebounds, assists, steals, blocks, turnovers, fouls,
-                              fg2_m, fg2_a, fg3_m, fg3_a, ft_m, ft_a, is_home_value))
-                        conn.commit()
-                        save_data()
-                        st.success("✅ 数据保存成功！")
-                        st.balloons()
-                    
-                except Exception as e:
-                    st.error(f"❌ 保存失败：{e}")
-
+           # 保存按钮
+if st.button("💾 保存数据", type="primary"):
+    try:
+        # 确保所有ID都是整数
+        player_id = int(selected_player)
+        match_id_int = int(match_id)
+        
+        if existing_data:
+            # 更新现有数据
+            cursor.execute("""
+                UPDATE player_stats 
+                SET points = ?, rebounds = ?, assists = ?, steals = ?, blocks = ?, 
+                    turnovers = ?, fouls = ?, fg2_made = ?, fg2_attempts = ?, 
+                    fg3_made = ?, fg3_attempts = ?, ft_made = ?, ft_attempts = ?,
+                    is_home = ?
+                WHERE player_id = ? AND match_id = ?
+            """, (total_points, rebounds, assists, steals, blocks, turnovers, fouls,
+                  fg2_m, fg2_a, fg3_m, fg3_a, ft_m, ft_a, is_home_value,
+                  player_id, match_id_int))
+            conn.commit()
+            
+            # ===== 新增：重新计算该场比赛的胜负 =====
+            cursor.execute("""
+                SELECT home_manual_score, away_manual_score 
+                FROM matches 
+                WHERE match_id = ?
+            """, (match_id_int,))
+            scores = cursor.fetchone()
+            if scores:
+                home_score, away_score = scores
+                # 重新计算胜负
+                if home_score > away_score:
+                    cursor.execute("UPDATE matches SET home_win = 1, away_win = 0 WHERE match_id = ?", (match_id_int,))
+                elif away_score > home_score:
+                    cursor.execute("UPDATE matches SET home_win = 0, away_win = 1 WHERE match_id = ?", (match_id_int,))
+                else:
+                    cursor.execute("UPDATE matches SET home_win = 1, away_win = 1 WHERE match_id = ?", (match_id_int,))
+                conn.commit()
+            # ======================================
+            
+            save_data()
+            st.success("✅ 数据更新成功！")
+            st.balloons()
+        else:
+            # 插入新数据
+            cursor.execute("""
+                INSERT INTO player_stats 
+                (player_id, match_id, points, rebounds, assists, steals, blocks, turnovers, fouls,
+                 fg2_made, fg2_attempts, fg3_made, fg3_attempts, ft_made, ft_attempts, is_home)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (player_id, match_id_int, total_points, rebounds, assists, steals, blocks, turnovers, fouls,
+                  fg2_m, fg2_a, fg3_m, fg3_a, ft_m, ft_a, is_home_value))
+            conn.commit()
+            
+            # ===== 新增：重新计算该场比赛的胜负 =====
+            cursor.execute("""
+                SELECT home_manual_score, away_manual_score 
+                FROM matches 
+                WHERE match_id = ?
+            """, (match_id_int,))
+            scores = cursor.fetchone()
+            if scores:
+                home_score, away_score = scores
+                # 重新计算胜负
+                if home_score > away_score:
+                    cursor.execute("UPDATE matches SET home_win = 1, away_win = 0 WHERE match_id = ?", (match_id_int,))
+                elif away_score > home_score:
+                    cursor.execute("UPDATE matches SET home_win = 0, away_win = 1 WHERE match_id = ?", (match_id_int,))
+                else:
+                    cursor.execute("UPDATE matches SET home_win = 1, away_win = 1 WHERE match_id = ?", (match_id_int,))
+                conn.commit()
+            # ======================================
+            
+            save_data()
+            st.success("✅ 数据保存成功！")
+            st.balloons()
+        
+    except Exception as e:
+        st.error(f"❌ 保存失败：{e}")
 # ==================== 球员数据榜 ====================
 elif menu == "📊 球员数据榜":
     st.header("📊 球员数据榜")
@@ -1349,3 +1397,4 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
