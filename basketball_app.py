@@ -148,14 +148,16 @@ def update_match_results():
                 FROM player_stats 
                 WHERE match_id = ?
             """, (match_id,))
-            home_total, away_total = cursor.fetchone()
+            result = cursor.fetchone()
+            home_total = result[0] if result[0] is not None else 0
+            away_total = result[1] if result[1] is not None else 0
             
             # 更新比赛的总分
             cursor.execute("""
                 UPDATE matches 
                 SET home_manual_score = ?, away_manual_score = ? 
                 WHERE match_id = ?
-            """, (home_total or 0, away_total or 0, match_id))
+            """, (home_total, away_total, match_id))
             
             # 根据总分判断胜负
             if home_total > away_total:
@@ -1452,6 +1454,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
