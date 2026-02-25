@@ -174,22 +174,6 @@ def update_match_results():
     except Exception as e:
         print(f"更新失败: {e}")
         return False
-            
-            # 更新数据库
-            cursor.execute("""
-                UPDATE matches 
-                SET home_win = ?, away_win = ? 
-                WHERE match_id = ?
-            """, (home_win, away_win, match_id))
-            print(f"比赛 {match_id}: 主队 {home_score} vs 客队 {away_score} -> 主队胜 {home_win}, 客队胜 {away_win}")
-        
-        conn.commit()
-        conn.close()
-        print("✅ 胜负更新成功")
-        return True
-    except Exception as e:
-        print(f"更新胜负失败: {e}")
-        return False
 
 # ========== 应用启动时自动恢复数据 ==========
 if os.path.exists(DATA_BACKUP_FILE):
@@ -1454,6 +1438,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
