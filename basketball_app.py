@@ -565,9 +565,11 @@ elif menu == "📊 球员数据榜":
 elif menu == "📋 比赛记录":
     st.header("📋 比赛记录")
     
-    # 查询所有比赛
+    # 查询所有比赛（包含手动得分字段）
     matches = pd.read_sql("""
-        SELECT m.match_id, m.match_date, m.match_name, m.game_type, m.home_win, m.away_win,
+        SELECT m.match_id, m.match_date, m.match_name, m.game_type, 
+               m.home_win, m.away_win,
+               m.home_manual_score, m.away_manual_score,
                CASE 
                    WHEN m.home_team_id IS NOT NULL THEN t1.team_name 
                    ELSE '队伍1' 
@@ -599,11 +601,11 @@ elif menu == "📋 比赛记录":
             ORDER BY ps.is_home, ps.points DESC
         """, conn)
         
-        # 计算两队总得分和球员名单
+        # 计算球员数据得分
         home_players = []
         away_players = []
-        home_total = 0
-        away_total = 0
+        home_players_total = 0
+        away_players_total = 0
         
         if not preview_stats.empty:
             home_stats = preview_stats[preview_stats['is_home'] == 1]
@@ -611,8 +613,17 @@ elif menu == "📋 比赛记录":
             
             home_players = home_stats['player_name'].tolist()
             away_players = away_stats['player_name'].tolist()
-            home_total = home_stats['points'].sum()
-            away_total = away_stats['points'].sum()
+            home_players_total = home_stats['points'].sum()
+            away_players_total = away_stats['points'].sum()
+        
+        # ===== 智能计算最终得分 =====
+        # 如果有球员数据，使用球员数据；否则使用手动输入的得分
+        home_final_score = home_players_total if not preview_stats.empty and home_players_total > 0 else m['home_manual_score']
+        away_final_score = away_players_total if not preview_stats.empty and away_players_total > 0 else m['away_manual_score']
+        
+        # 标记得分来源
+        home_score_source = "📊 球员数据" if home_players_total > 0 else "✏️ 手动输入" if m['home_manual_score'] > 0 else "⭕ 无数据"
+        away_score_source = "📊 球员数据" if away_players_total > 0 else "✏️ 手动输入" if m['away_manual_score'] > 0 else "⭕ 无数据"
         
         # 确定获胜方
         winner = ""
@@ -622,10 +633,19 @@ elif menu == "📋 比赛记录":
             winner = f"🏆 {m['home_team']} 获胜"
         elif m['away_win']:
             winner = f"🏆 {m['away_team']} 获胜"
+        else:
+            # 如果没有设置获胜方，根据得分自动判断
+            if home_final_score > away_final_score:
+                winner = f"🏆 {m['home_team']} 获胜（自动）"
+            elif away_final_score > home_final_score:
+                winner = f"🏆 {m['away_team']} 获胜（自动）"
+            elif home_final_score > 0 and home_final_score == away_final_score:
+                winner = "🤝 平局（自动）"
         
         # 创建预览文本
         preview_text = f"📅 {m['match_date']} {m['match_name']} [{game_type_display}]"
-        preview_text += f"\n{m['home_team']} {home_total} : {away_total} {m['away_team']}"
+        preview_text += f"\n{m['home_team']} {home_final_score} : {away_final_score} {m['away_team']}"
+        preview_text += f"\n{home_score_source} | {away_score_source}"
         if winner:
             preview_text += f"  {winner}"
         
@@ -641,6 +661,8 @@ elif menu == "📋 比赛记录":
                 preview_text += f"✈️ {m['away_team']}: {', '.join(away_players[:3])}"
                 if len(away_players) > 3:
                     preview_text += f" 等{len(away_players)}人"
+        elif m['home_manual_score'] > 0 or m['away_manual_score'] > 0:
+            preview_text += "\n\n📝 手动输入得分"
         
         with st.expander(preview_text):
             # 查询本场比赛的所有球员数据（详细）
@@ -673,49 +695,39 @@ elif menu == "📋 比赛记录":
                 home_stats = all_stats_df[all_stats_df['is_home'] == 1].copy()
                 away_stats = all_stats_df[all_stats_df['is_home'] == 0].copy()
                 
-                # 计算两队总得分（重新计算确保准确）
-                home_total = home_stats['points'].sum() if not home_stats.empty else 0
-                away_total = away_stats['points'].sum() if not away_stats.empty else 0
+                # 计算球员数据得分
+                home_players_total = home_stats['points'].sum() if not home_stats.empty else 0
+                away_players_total = away_stats['points'].sum() if not away_stats.empty else 0
                 
-                col1, col2, col3 = st.columns(3)
+                # 智能计算最终得分
+                home_display_score = home_players_total if home_players_total > 0 else m['home_manual_score']
+                away_display_score = away_players_total if away_players_total > 0 else m['away_manual_score']
+                
+                # 显示得分和来源
+                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
                 with col1:
-                    st.metric(f"{m['home_team']} 总得分", home_total)
+                    st.metric(f"{m['home_team']} 得分", home_display_score)
+                    if home_players_total > 0:
+                        st.caption("📊 来自球员数据")
+                    elif m['home_manual_score'] > 0:
+                        st.caption("✏️ 手动输入")
                 with col2:
-                    st.metric(f"{m['away_team']} 总得分", away_total)
+                    st.metric(f"{m['away_team']} 得分", away_display_score)
+                    if away_players_total > 0:
+                        st.caption("📊 来自球员数据")
+                    elif m['away_manual_score'] > 0:
+                        st.caption("✏️ 手动输入")
                 with col3:
-                    st.metric("分差", abs(home_total - away_total))
+                    st.metric("分差", abs(home_display_score - away_display_score))
+                with col4:
+                    if home_players_total == 0 and away_players_total == 0:
+                        st.info("📝 手动得分")
                 
                 st.markdown("---")
                 
                 # ===== 主队数据表格 =====
                 if not home_stats.empty:
                     st.subheader(f"🏠 {m['home_team']}")
-                    
-                    # 使用HTML/CSS样式让表格更紧凑
-                    st.markdown("""
-                    <style>
-                    .compact-table {
-                        font-size: 16px;
-                        line-height: 1.2;
-                        margin-bottom: 5px;
-                    }
-                    .compact-table th {
-                        background-color: #f0f2f6;
-                        padding: 4px 8px;
-                        text-align: center;
-                        font-weight: 600;
-                    }
-                    .compact-table td {
-                        padding: 2px 8px;
-                        text-align: center;
-                    }
-                    .delete-btn {
-                        color: #ff4b4b;
-                        cursor: pointer;
-                        font-size: 18px;
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
                     
                     # 创建表头
                     cols = st.columns([2, 1, 1, 1, 1, 1, 1, 1, 2.5, 0.8])
@@ -729,10 +741,7 @@ elif menu == "📋 比赛记录":
                     for _, row in home_stats.iterrows():
                         cols = st.columns([2, 1, 1, 1, 1, 1, 1, 1, 2.5, 0.8])
                         
-                        # 球员名
                         cols[0].markdown(f"**{row['player_name']}**")
-                        
-                        # 基础数据
                         cols[1].markdown(f"**{row['points']}**")
                         cols[2].markdown(f"**{row['rebounds']}**")
                         cols[3].markdown(f"**{row['assists']}**")
@@ -741,19 +750,17 @@ elif menu == "📋 比赛记录":
                         cols[6].markdown(f"**{row['turnovers']}**")
                         cols[7].markdown(f"**{row['fouls']}**")
                         
-                        # 投篮数据
                         fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
                         fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
                         ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
                         cols[8].markdown(f"**{fg2}** | **{fg3}** | **{ft}**")
                         
-                        # 删除按钮
                         with cols[9]:
                             if st.button("🗑️", key=f"del_home_{row['stat_id']}", help="删除这条数据"):
                                 try:
                                     conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
                                     conn.commit()
-                                    save_data()  # ✅ 新增：保存数据
+                                    save_data()
                                     st.success(f"✅ 已删除 {row['player_name']} 的数据")
                                     st.rerun()
                                 except Exception as e:
@@ -761,7 +768,10 @@ elif menu == "📋 比赛记录":
                         
                         st.markdown("---")
                 else:
-                    st.info(f"{m['home_team']} 暂无球员数据")
+                    if m['home_manual_score'] > 0:
+                        st.info(f"{m['home_team']} 无球员数据，使用手动得分：{m['home_manual_score']}分")
+                    else:
+                        st.info(f"{m['home_team']} 暂无球员数据")
                 
                 st.markdown("---")
                 
@@ -781,10 +791,7 @@ elif menu == "📋 比赛记录":
                     for _, row in away_stats.iterrows():
                         cols = st.columns([2, 1, 1, 1, 1, 1, 1, 1, 2.5, 0.8])
                         
-                        # 球员名
                         cols[0].markdown(f"**{row['player_name']}**")
-                        
-                        # 基础数据
                         cols[1].markdown(f"**{row['points']}**")
                         cols[2].markdown(f"**{row['rebounds']}**")
                         cols[3].markdown(f"**{row['assists']}**")
@@ -793,19 +800,17 @@ elif menu == "📋 比赛记录":
                         cols[6].markdown(f"**{row['turnovers']}**")
                         cols[7].markdown(f"**{row['fouls']}**")
                         
-                        # 投篮数据
                         fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
                         fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
                         ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
                         cols[8].markdown(f"**{fg2}** | **{fg3}** | **{ft}**")
                         
-                        # 删除按钮
                         with cols[9]:
                             if st.button("🗑️", key=f"del_away_{row['stat_id']}", help="删除这条数据"):
                                 try:
                                     conn.execute("DELETE FROM player_stats WHERE stat_id = ?", (row['stat_id'],))
                                     conn.commit()
-                                    save_data()  # ✅ 新增：保存数据
+                                    save_data()
                                     st.success(f"✅ 已删除 {row['player_name']} 的数据")
                                     st.rerun()
                                 except Exception as e:
@@ -813,11 +818,28 @@ elif menu == "📋 比赛记录":
                         
                         st.markdown("---")
                 else:
-                    st.info(f"{m['away_team']} 暂无球员数据")
+                    if m['away_manual_score'] > 0:
+                        st.info(f"{m['away_team']} 无球员数据，使用手动得分：{m['away_manual_score']}分")
+                    else:
+                        st.info(f"{m['away_team']} 暂无球员数据")
                 
                 st.caption(f"本场共 {len(all_stats_df)} 名球员")
             else:
-                st.info("暂无球员数据")
+                # 如果没有球员数据，显示手动得分
+                if m['home_manual_score'] > 0 or m['away_manual_score'] > 0:
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric(f"{m['home_team']} 得分", m['home_manual_score'])
+                        st.caption("✏️ 手动输入")
+                    with col2:
+                        st.metric(f"{m['away_team']} 得分", m['away_manual_score'])
+                        st.caption("✏️ 手动输入")
+                    with col3:
+                        st.metric("分差", abs(m['home_manual_score'] - m['away_manual_score']))
+                    
+                    st.info("📝 本场比赛无球员数据，仅记录队伍总分")
+                else:
+                    st.info("暂无球员数据，也未设置手动得分")
 # ==================== 管理后台 ====================
 elif menu == "⚙️ 管理后台":
     st.header("⚙️ 管理后台")
@@ -1138,6 +1160,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
