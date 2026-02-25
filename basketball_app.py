@@ -130,6 +130,7 @@ if os.path.exists(DATA_BACKUP_FILE):
         print("✅ 数据自动恢复成功")
     else:
         print("⚠️ 数据恢复失败")
+
 # ========== 数据库初始化函数 ==========
 def init_database():
     """初始化数据库表结构"""
@@ -156,31 +157,51 @@ def init_database():
         )
     """)
     
-    # 创建比赛表
+    # 创建比赛表（包含所有字段）
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS matches (
             match_id INTEGER PRIMARY KEY AUTOINCREMENT,
             match_date DATE NOT NULL,
+            match_name TEXT,
             game_type TEXT DEFAULT '5v5',
             home_team_id INTEGER,
             away_team_id INTEGER,
             home_win INTEGER DEFAULT 0,
             away_win INTEGER DEFAULT 0,
+            home_manual_score INTEGER DEFAULT 0,
+            away_manual_score INTEGER DEFAULT 0,
             FOREIGN KEY (home_team_id) REFERENCES teams(team_id),
             FOREIGN KEY (away_team_id) REFERENCES teams(team_id)
         )
     """)
     
-    # 检查并添加 match_name 字段
+    # 检查并添加可能缺失的字段
     cursor.execute("PRAGMA table_info(matches)")
-    columns = [col[1] for col in cursor.fetchall()]
+    existing_columns = [col[1] for col in cursor.fetchall()]
     
-    if 'match_name' not in columns:
+    # 检查并添加 match_name 字段
+    if 'match_name' not in existing_columns:
         try:
             cursor.execute("ALTER TABLE matches ADD COLUMN match_name TEXT")
             print("✅ 添加 match_name 字段成功")
         except Exception as e:
             print(f"添加 match_name 字段失败: {e}")
+    
+    # 检查并添加 home_manual_score 字段
+    if 'home_manual_score' not in existing_columns:
+        try:
+            cursor.execute("ALTER TABLE matches ADD COLUMN home_manual_score INTEGER DEFAULT 0")
+            print("✅ 添加 home_manual_score 字段成功")
+        except Exception as e:
+            print(f"添加 home_manual_score 字段失败: {e}")
+    
+    # 检查并添加 away_manual_score 字段
+    if 'away_manual_score' not in existing_columns:
+        try:
+            cursor.execute("ALTER TABLE matches ADD COLUMN away_manual_score INTEGER DEFAULT 0")
+            print("✅ 添加 away_manual_score 字段成功")
+        except Exception as e:
+            print(f"添加 away_manual_score 字段失败: {e}")
     
     # 创建球员统计表
     cursor.execute("""
@@ -261,9 +282,10 @@ menu = st.sidebar.selectbox("菜单", [ "📊 球员数据榜", "📋 比赛记�
 if menu == "📝 数据录入":
     st.header("📝 录入本场数据")
     
-    # 获取所有比赛（包含match_name）
+    # 获取所有比赛（包含match_name和手动得分）
     matches = pd.read_sql("""
         SELECT m.match_id, m.match_date, m.match_name, m.game_type,
+               m.home_manual_score, m.away_manual_score,
                CASE 
                    WHEN m.home_team_id IS NOT NULL THEN t1.team_name 
                    ELSE '队伍1' 
@@ -306,7 +328,7 @@ if menu == "📝 数据录入":
             conn.execute("UPDATE matches SET home_win = ?, away_win = ? WHERE match_id = ?",
                         (1 if home_win else 0, 1 if away_win else 0, match_id))
             conn.commit()
-            save_data()  # ✅ 新增：保存数据
+            save_data()
             st.success("✅ 比赛结果已更新")
             st.rerun()
         
@@ -393,7 +415,7 @@ if menu == "📝 数据录入":
                 turnovers = st.number_input("失误", 0, 20, value=int(default_values['turnovers']) if default_values else 0, key="to")
                 fouls = st.number_input("犯规", 0, 6, value=int(default_values['fouls']) if default_values else 0, key="fls")
             
-           # 保存按钮
+            # 保存按钮
             if st.button("💾 保存数据", type="primary"):
                 try:
                     # 确保所有ID都是整数
@@ -413,7 +435,7 @@ if menu == "📝 数据录入":
                               fg2_m, fg2_a, fg3_m, fg3_a, ft_m, ft_a, is_home_value,
                               player_id, match_id_int))
                         conn.commit()
-                        save_data()  # ✅ 新增：保存数据
+                        save_data()
                         st.success("✅ 数据更新成功！")
                         st.balloons()
                     else:
@@ -426,7 +448,7 @@ if menu == "📝 数据录入":
                         """, (player_id, match_id_int, total_points, rebounds, assists, steals, blocks, turnovers, fouls,
                               fg2_m, fg2_a, fg3_m, fg3_a, ft_m, ft_a, is_home_value))
                         conn.commit()
-                        save_data()  # ✅ 新增：保存数据
+                        save_data()
                         st.success("✅ 数据保存成功！")
                         st.balloons()
                     
@@ -729,6 +751,32 @@ elif menu == "📋 比赛记录":
                 if not home_stats.empty:
                     st.subheader(f"🏠 {m['home_team']}")
                     
+                    # 使用HTML/CSS样式让表格更紧凑
+                    st.markdown("""
+                    <style>
+                    .compact-table {
+                        font-size: 16px;
+                        line-height: 1.2;
+                        margin-bottom: 5px;
+                    }
+                    .compact-table th {
+                        background-color: #f0f2f6;
+                        padding: 4px 8px;
+                        text-align: center;
+                        font-weight: 600;
+                    }
+                    .compact-table td {
+                        padding: 2px 8px;
+                        text-align: center;
+                    }
+                    .delete-btn {
+                        color: #ff4b4b;
+                        cursor: pointer;
+                        font-size: 18px;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
+                    
                     # 创建表头
                     cols = st.columns([2, 1, 1, 1, 1, 1, 1, 1, 2.5, 0.8])
                     headers = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', '投篮', '操作']
@@ -741,7 +789,10 @@ elif menu == "📋 比赛记录":
                     for _, row in home_stats.iterrows():
                         cols = st.columns([2, 1, 1, 1, 1, 1, 1, 1, 2.5, 0.8])
                         
+                        # 球员名
                         cols[0].markdown(f"**{row['player_name']}**")
+                        
+                        # 基础数据
                         cols[1].markdown(f"**{row['points']}**")
                         cols[2].markdown(f"**{row['rebounds']}**")
                         cols[3].markdown(f"**{row['assists']}**")
@@ -750,11 +801,13 @@ elif menu == "📋 比赛记录":
                         cols[6].markdown(f"**{row['turnovers']}**")
                         cols[7].markdown(f"**{row['fouls']}**")
                         
+                        # 投篮数据
                         fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
                         fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
                         ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
                         cols[8].markdown(f"**{fg2}** | **{fg3}** | **{ft}**")
                         
+                        # 删除按钮
                         with cols[9]:
                             if st.button("🗑️", key=f"del_home_{row['stat_id']}", help="删除这条数据"):
                                 try:
@@ -791,7 +844,10 @@ elif menu == "📋 比赛记录":
                     for _, row in away_stats.iterrows():
                         cols = st.columns([2, 1, 1, 1, 1, 1, 1, 1, 2.5, 0.8])
                         
+                        # 球员名
                         cols[0].markdown(f"**{row['player_name']}**")
+                        
+                        # 基础数据
                         cols[1].markdown(f"**{row['points']}**")
                         cols[2].markdown(f"**{row['rebounds']}**")
                         cols[3].markdown(f"**{row['assists']}**")
@@ -800,11 +856,13 @@ elif menu == "📋 比赛记录":
                         cols[6].markdown(f"**{row['turnovers']}**")
                         cols[7].markdown(f"**{row['fouls']}**")
                         
+                        # 投篮数据
                         fg2 = f"{row['fg2_made']}/{row['fg2_attempts']}" if row['fg2_attempts'] > 0 else "0/0"
                         fg3 = f"{row['fg3_made']}/{row['fg3_attempts']}" if row['fg3_attempts'] > 0 else "0/0"
                         ft = f"{row['ft_made']}/{row['ft_attempts']}" if row['ft_attempts'] > 0 else "0/0"
                         cols[8].markdown(f"**{fg2}** | **{fg3}** | **{ft}**")
                         
+                        # 删除按钮
                         with cols[9]:
                             if st.button("🗑️", key=f"del_away_{row['stat_id']}", help="删除这条数据"):
                                 try:
@@ -840,11 +898,12 @@ elif menu == "📋 比赛记录":
                     st.info("📝 本场比赛无球员数据，仅记录队伍总分")
                 else:
                     st.info("暂无球员数据，也未设置手动得分")
+
 # ==================== 管理后台 ====================
 elif menu == "⚙️ 管理后台":
     st.header("⚙️ 管理后台")
     
-    # 创建四个标签页（这里要确保有4个）
+    # 创建四个标签页
     tab1, tab2, tab3, tab4 = st.tabs(["🏀 球队管理", "👤 球员管理", "📅 比赛管理", "💾 备份管理"])
     
     # ========== 球队管理 ==========
@@ -1025,15 +1084,39 @@ elif menu == "⚙️ 管理后台":
                     index=1 if len(team_options) > 1 else 0
                 )
             
+            # 新增：手动得分输入
+            st.subheader("📊 队伍得分（可选）")
+            st.caption("如果之后会录入球员数据，可以留空；如果没有球员数据，请填写")
+            
+            # 获取选择的球队名称用于显示
+            home_team_name = "主队"
+            away_team_name = "客队"
+            if home_team is not None:
+                home_team_row = teams_df[teams_df['team_id'] == home_team]
+                if not home_team_row.empty:
+                    home_team_name = home_team_row['team_name'].values[0]
+            if away_team is not None:
+                away_team_row = teams_df[teams_df['team_id'] == away_team]
+                if not away_team_row.empty:
+                    away_team_name = away_team_row['team_name'].values[0]
+            
+            col_score1, col_score2 = st.columns(2)
+            with col_score1:
+                home_manual_score = st.number_input(f"{home_team_name} 得分", min_value=0, value=0, key="home_score")
+            with col_score2:
+                away_manual_score = st.number_input(f"{away_team_name} 得分", min_value=0, value=0, key="away_score")
+            
             if st.form_submit_button("创建比赛"):
                 if home_team is not None and away_team is not None and home_team == away_team:
                     st.error("主队和客队不能相同")
                 else:
                     try:
                         conn.execute("""
-                            INSERT INTO matches (match_date, match_name, game_type, home_team_id, away_team_id)
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (match_date, match_name, game_type, home_team, away_team))
+                            INSERT INTO matches (match_date, match_name, game_type, home_team_id, away_team_id,
+                                                home_manual_score, away_manual_score)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (match_date, match_name, game_type, home_team, away_team, 
+                              home_manual_score, away_manual_score))
                         conn.commit()
                         save_data()
                         st.success(f"✅ 比赛创建成功：{match_date} {match_name}")
@@ -1051,6 +1134,8 @@ elif menu == "⚙️ 管理后台":
                 m.match_date,
                 m.match_name,
                 m.game_type,
+                m.home_manual_score,
+                m.away_manual_score,
                 CASE 
                     WHEN m.home_team_id IS NOT NULL THEN t1.team_name 
                     ELSE '队伍1' 
@@ -1097,7 +1182,8 @@ elif menu == "⚙️ 管理后台":
                     st.write(f"{game_type_display}")
                 
                 with col4:
-                    st.write(f"{row['home_team']} vs {row['away_team']}")
+                    score_text = f"{row['home_team']} {row['home_manual_score']} : {row['away_manual_score']} {row['away_team']}"
+                    st.write(score_text)
                     if winner:
                         st.caption(winner)
                 
@@ -1160,15 +1246,3 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
-
-
-
-
-
-
-
-
-
-
-
-
