@@ -130,30 +130,48 @@ def restore_from_backup(backup_file):
 
 # ========== 自动更新比赛胜负 ==========
 def update_match_results():
-    """根据比赛得分自动更新胜负结果"""
+    """根据球员数据自动更新比赛总分和胜负"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
         # 获取所有比赛
-        cursor.execute("""
-            SELECT match_id, home_manual_score, away_manual_score 
-            FROM matches
-        """)
-        matches = cursor.fetchall()
+        cursor.execute("SELECT DISTINCT match_id FROM player_stats")
+        match_ids = cursor.fetchall()
         
-        for match_id, home_score, away_score in matches:
-            # 根据得分判断胜负
-            if home_score > away_score:
-                home_win = 1
-                away_win = 0
-            elif away_score > home_score:
-                home_win = 0
-                away_win = 1
+        for (match_id,) in match_ids:
+            # 计算该场比赛主客队总分
+            cursor.execute("""
+                SELECT 
+                    SUM(CASE WHEN is_home = 1 THEN points ELSE 0 END) as home_total,
+                    SUM(CASE WHEN is_home = 0 THEN points ELSE 0 END) as away_total
+                FROM player_stats 
+                WHERE match_id = ?
+            """, (match_id,))
+            home_total, away_total = cursor.fetchone()
+            
+            # 更新比赛的总分
+            cursor.execute("""
+                UPDATE matches 
+                SET home_manual_score = ?, away_manual_score = ? 
+                WHERE match_id = ?
+            """, (home_total or 0, away_total or 0, match_id))
+            
+            # 根据总分判断胜负
+            if home_total > away_total:
+                cursor.execute("UPDATE matches SET home_win = 1, away_win = 0 WHERE match_id = ?", (match_id,))
+            elif away_total > home_total:
+                cursor.execute("UPDATE matches SET home_win = 0, away_win = 1 WHERE match_id = ?", (match_id,))
             else:
-                # 得分相同，平局（双方都算赢？或者都不算？根据你的需求）
-                home_win = 0
-                away_win = 0  # 平局可以设为0,0或者1,1，根据你的需求
+                cursor.execute("UPDATE matches SET home_win = 0, away_win = 0 WHERE match_id = ?", (match_id,))
+        
+        conn.commit()
+        conn.close()
+        print("✅ 比赛总分和胜负更新成功")
+        return True
+    except Exception as e:
+        print(f"更新失败: {e}")
+        return False
             
             # 更新数据库
             cursor.execute("""
@@ -445,7 +463,7 @@ if menu == "📝 数据录入":
                 turnovers = st.number_input("失误", 0, 20, value=int(default_values['turnovers']) if default_values else 0, key="to")
                 fouls = st.number_input("犯规", 0, 6, value=int(default_values['fouls']) if default_values else 0, key="fls")
             
-           # 保存按钮
+        # 保存按钮
 if st.button("💾 保存数据", type="primary"):
     try:
         # 确保所有ID都是整数
@@ -465,29 +483,6 @@ if st.button("💾 保存数据", type="primary"):
                   fg2_m, fg2_a, fg3_m, fg3_a, ft_m, ft_a, is_home_value,
                   player_id, match_id_int))
             conn.commit()
-            
-            # ===== 新增：重新计算该场比赛的胜负 =====
-            cursor.execute("""
-                SELECT home_manual_score, away_manual_score 
-                FROM matches 
-                WHERE match_id = ?
-            """, (match_id_int,))
-            scores = cursor.fetchone()
-            if scores:
-                home_score, away_score = scores
-                # 重新计算胜负
-                if home_score > away_score:
-                    cursor.execute("UPDATE matches SET home_win = 1, away_win = 0 WHERE match_id = ?", (match_id_int,))
-                elif away_score > home_score:
-                    cursor.execute("UPDATE matches SET home_win = 0, away_win = 1 WHERE match_id = ?", (match_id_int,))
-                else:
-                    cursor.execute("UPDATE matches SET home_win = 1, away_win = 1 WHERE match_id = ?", (match_id_int,))
-                conn.commit()
-            # ======================================
-            
-            save_data()
-            st.success("✅ 数据更新成功！")
-            st.balloons()
         else:
             # 插入新数据
             cursor.execute("""
@@ -498,29 +493,46 @@ if st.button("💾 保存数据", type="primary"):
             """, (player_id, match_id_int, total_points, rebounds, assists, steals, blocks, turnovers, fouls,
                   fg2_m, fg2_a, fg3_m, fg3_a, ft_m, ft_a, is_home_value))
             conn.commit()
-            
-            # ===== 新增：重新计算该场比赛的胜负 =====
-            cursor.execute("""
-                SELECT home_manual_score, away_manual_score 
-                FROM matches 
-                WHERE match_id = ?
-            """, (match_id_int,))
-            scores = cursor.fetchone()
-            if scores:
-                home_score, away_score = scores
-                # 重新计算胜负
-                if home_score > away_score:
-                    cursor.execute("UPDATE matches SET home_win = 1, away_win = 0 WHERE match_id = ?", (match_id_int,))
-                elif away_score > home_score:
-                    cursor.execute("UPDATE matches SET home_win = 0, away_win = 1 WHERE match_id = ?", (match_id_int,))
-                else:
-                    cursor.execute("UPDATE matches SET home_win = 1, away_win = 1 WHERE match_id = ?", (match_id_int,))
-                conn.commit()
-            # ======================================
-            
-            save_data()
-            st.success("✅ 数据保存成功！")
-            st.balloons()
+        
+        # ===== 更新该场比赛的总分 =====
+        # 计算该场比赛所有球员的总分
+        cursor.execute("""
+            SELECT SUM(points) as total 
+            FROM player_stats 
+            WHERE match_id = ?
+        """, (match_id_int,))
+        total = cursor.fetchone()[0]
+        
+        # 根据球员所在队伍分别计算主客队总分
+        cursor.execute("""
+            SELECT 
+                SUM(CASE WHEN is_home = 1 THEN points ELSE 0 END) as home_total,
+                SUM(CASE WHEN is_home = 0 THEN points ELSE 0 END) as away_total
+            FROM player_stats 
+            WHERE match_id = ?
+        """, (match_id_int,))
+        home_total, away_total = cursor.fetchone()
+        
+        # 更新比赛的总分
+        cursor.execute("""
+            UPDATE matches 
+            SET home_manual_score = ?, away_manual_score = ? 
+            WHERE match_id = ?
+        """, (home_total or 0, away_total or 0, match_id_int))
+        conn.commit()
+        
+        # ===== 根据更新后的总分自动判断胜负 =====
+        if home_total > away_total:
+            cursor.execute("UPDATE matches SET home_win = 1, away_win = 0 WHERE match_id = ?", (match_id_int,))
+        elif away_total > home_total:
+            cursor.execute("UPDATE matches SET home_win = 0, away_win = 1 WHERE match_id = ?", (match_id_int,))
+        else:
+            cursor.execute("UPDATE matches SET home_win = 0, away_win = 0 WHERE match_id = ?", (match_id_int,))
+        conn.commit()
+        
+        save_data()
+        st.success("✅ 数据保存成功！")
+        st.balloons()
         
     except Exception as e:
         st.error(f"❌ 保存失败：{e}")
@@ -1447,6 +1459,7 @@ elif menu == "⚙️ 管理后台":
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
