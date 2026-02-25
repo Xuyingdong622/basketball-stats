@@ -822,8 +822,8 @@ elif menu == "📋 比赛记录":
 elif menu == "⚙️ 管理后台":
     st.header("⚙️ 管理后台")
     
-    # 创建三个标签页
-    tab1, tab2, tab3, tab4 = st.tabs(["🏀 球队管理", "👤 球员管理", "📅 比赛管理", "💾 数据备份"])
+    # 创建四个标签页（这里要确保有4个）
+    tab1, tab2, tab3, tab4 = st.tabs(["🏀 球队管理", "👤 球员管理", "📅 比赛管理", "💾 备份管理"])
     
     # ========== 球队管理 ==========
     with tab1:
@@ -835,6 +835,7 @@ elif menu == "⚙️ 管理后台":
                     try:
                         conn.execute("INSERT INTO teams (team_name) VALUES (?)", (team_name,))
                         conn.commit()
+                        save_data()
                         st.success(f"✅ 球队 {team_name} 添加成功")
                         st.rerun()
                     except Exception as e:
@@ -878,12 +879,12 @@ elif menu == "⚙️ 管理后台":
                             try:
                                 conn.execute("DELETE FROM teams WHERE team_id = ?", (row['team_id'],))
                                 conn.commit()
-                                save_data()  # ✅ 新增：保存数据
+                                save_data()
                                 st.success(f"球队 {row['team_name']} 已删除")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"删除失败：{e}")
-                                    
+                
                 st.divider()
             
             st.caption(f"总计 {len(teams_df)} 支球队")
@@ -904,6 +905,7 @@ elif menu == "⚙️ 管理后台":
                             (player_name, jersey)
                         )
                         conn.commit()
+                        save_data()
                         st.success(f"球员 {player_name} 添加成功")
                         st.rerun()
                     except Exception as e:
@@ -947,7 +949,7 @@ elif menu == "⚙️ 管理后台":
                             try:
                                 conn.execute("DELETE FROM players WHERE player_id = ?", (row['player_id'],))
                                 conn.commit()
-                                save_data()  # ✅ 新增：保存数据
+                                save_data()
                                 st.success(f"球员 {row['player_name']} 已删除")
                                 st.rerun()
                             except Exception as e:
@@ -1011,6 +1013,7 @@ elif menu == "⚙️ 管理后台":
                             VALUES (?, ?, ?, ?, ?)
                         """, (match_date, match_name, game_type, home_team, away_team))
                         conn.commit()
+                        save_data()
                         st.success(f"✅ 比赛创建成功：{match_date} {match_name}")
                         st.rerun()
                     except Exception as e:
@@ -1085,7 +1088,7 @@ elif menu == "⚙️ 管理后台":
                             try:
                                 conn.execute("DELETE FROM matches WHERE match_id = ?", (row['match_id'],))
                                 conn.commit()
-                                save_data()  # ✅ 新增：保存数据
+                                save_data()
                                 st.success(f"比赛已删除")
                                 st.rerun()
                             except Exception as e:
@@ -1096,57 +1099,46 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"📊 总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
-
-# ========== 数据备份管理 ==========
-with tab4:
-    st.subheader("💾 数据备份管理")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.info("📤 手动备份")
-        if st.button("创建新备份", type="primary"):
-            if save_data():
-                st.success("✅ 备份创建成功！")
-            else:
-                st.error("❌ 备份失败")
-    
-    with col2:
-        st.info("📥 恢复数据")
-        backups = list_backups()
-        if backups:
-            selected_backup = st.selectbox("选择备份文件", backups)
-            if st.button("恢复所选备份", type="primary"):
-                if restore_from_backup(selected_backup):
-                    st.success("✅ 恢复成功！页面将刷新")
-                    st.rerun()
-                else:
-                    st.error("❌ 恢复失败")
-        else:
-            st.warning("暂无备份文件")
-    
-    st.divider()
-    
-    # 显示备份统计
-    st.subheader("📊 备份统计")
-    backups = list_backups()
-    if backups:
-        st.write(f"总备份数：{len(backups)}")
+    # ========== 备份管理 ==========
+    with tab4:
+        st.subheader("💾 数据备份状态")
         
-        # 显示最近5个备份
-        st.write("最近备份：")
-        for backup in backups[:5]:
-            file_time = backup.replace('backup_', '').replace('.pkl', '')
-            try:
-                dt = datetime.strptime(file_time, '%Y%m%d_%H%M%S')
-                st.write(f"📁 {dt.strftime('%Y-%m-%d %H:%M:%S')}")
-            except:
-                st.write(f"📁 {backup}")
-    else:
-        st.info("暂无备份")
+        # 检查备份文件是否存在
+        if os.path.exists(DATA_BACKUP_FILE):
+            file_size = os.path.getsize(DATA_BACKUP_FILE)
+            file_time = os.path.getmtime(DATA_BACKUP_FILE)
+            last_backup = datetime.fromtimestamp(file_time).strftime('%Y-%m-%d %H:%M:%S')
+            
+            st.success(f"✅ 主备份文件存在")
+            st.info(f"📁 文件大小: {file_size} 字节")
+            st.info(f"🕐 最后修改: {last_backup}")
+            
+            # 显示备份目录中的文件
+            st.divider()
+            st.subheader("📋 历史备份列表")
+            backups = list_backups()
+            if backups:
+                for i, backup in enumerate(backups[:10]):
+                    file_path = os.path.join(BACKUP_DIR, backup)
+                    file_time = os.path.getmtime(file_path)
+                    backup_time = datetime.fromtimestamp(file_time).strftime('%Y-%m-%d %H:%M:%S')
+                    file_size = os.path.getsize(file_path)
+                    st.write(f"{i+1}. 📁 {backup_time} - {file_size} 字节")
+            else:
+                st.warning("暂无历史备份")
+        else:
+            st.error("❌ 主备份文件不存在")
+            
+            # 手动创建备份按钮
+            if st.button("立即创建备份"):
+                if save_data():
+                    st.success("✅ 备份创建成功！")
+                    st.rerun()
 
 # ========== 关闭数据库连接 ==========
 conn.close()
+
 
 
 
