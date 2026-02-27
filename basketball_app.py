@@ -139,15 +139,20 @@ if menu == "📝 数据录入":
             )
             is_home_value = 1 if "🏠" in is_home else 0
             
-            # 检查是否已有该球员本场比赛的数据
+            # 安全地检查是否已有该球员本场比赛的数据
             stats_df = get_player_stats(match_id)
-            existing_data = stats_df[stats_df['player_id'] == selected_player]
-            
+            existing_data = None
             default_values = None
-            if not existing_data.empty:
-                default_values = existing_data.iloc[0].to_dict()
-                st.warning("⚠️ 该球员本场比赛已有数据，将进行更新")
-                st.info(f"当前数据：得分 {default_values['points']}分，篮板 {default_values['rebounds']}个")
+            
+            if not stats_df.empty and 'player_id' in stats_df.columns:
+                player_data = stats_df[stats_df['player_id'] == selected_player]
+                if not player_data.empty:
+                    existing_data = player_data
+                    default_values = player_data.iloc[0].to_dict()
+                    st.warning("⚠️ 该球员本场比赛已有数据，将进行更新")
+                    st.info(f"当前数据：得分 {default_values['points']}分，篮板 {default_values['rebounds']}个")
+                else:
+                    st.success("✅ 可以录入新数据")
             else:
                 st.success("✅ 可以录入新数据")
             
@@ -214,7 +219,7 @@ if menu == "📝 数据录入":
                         "is_home": is_home_value
                     }
                     
-                    if not existing_data.empty:
+                    if existing_data is not None and not existing_data.empty:
                         # 更新现有数据
                         stat_id = existing_data.iloc[0]['stat_id']
                         supabase.table("player_stats").update(stats_data).eq("stat_id", stat_id).execute()
@@ -793,5 +798,6 @@ elif menu == "⚙️ 管理后台":
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ 创建失败：{e}")
+
 
 
