@@ -568,41 +568,185 @@ elif menu == "📋 比赛记录":
                     home_stats = match_stats[match_stats['is_home'] == 1].copy() if 'is_home' in match_stats.columns else pd.DataFrame()
                     away_stats = match_stats[match_stats['is_home'] == 0].copy() if 'is_home' in match_stats.columns else pd.DataFrame()
                     
-                    # 主队数据表格
+                    # ===== 主队数据表格（带出手数和命中率） =====
                     if not home_stats.empty and not players_df.empty:
                         st.subheader(f"🏠 {home_team_name}")
                         
-                        home_display = home_stats.merge(players_df, on='player_id')
-                        display_columns = []
-                        for col in ['player_name', 'points', 'rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls']:
-                            if col in home_display.columns:
-                                display_columns.append(col)
+                        # 合并球员名称
+                        home_display = home_stats.merge(players_df[['player_id', 'player_name']], on='player_id')
                         
-                        if display_columns:
-                            home_display = home_display[display_columns]
-                            column_names = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规']
-                            home_display.columns = column_names[:len(display_columns)]
-                            st.dataframe(home_display, use_container_width=True, hide_index=True)
+                        # 计算命中率和出手数
+                        home_display['fg2'] = home_display.apply(lambda x: f"{x['fg2_made']}/{x['fg2_attempts']}" if x['fg2_attempts'] > 0 else "0/0", axis=1)
+                        home_display['fg3'] = home_display.apply(lambda x: f"{x['fg3_made']}/{x['fg3_attempts']}" if x['fg3_attempts'] > 0 else "0/0", axis=1)
+                        home_display['ft'] = home_display.apply(lambda x: f"{x['ft_made']}/{x['ft_attempts']}" if x['ft_attempts'] > 0 else "0/0", axis=1)
+                        
+                        home_display['fg2_pct'] = home_display.apply(lambda x: f"{(x['fg2_made']/x['fg2_attempts']*100):.1f}%" if x['fg2_attempts'] > 0 else "-", axis=1)
+                        home_display['fg3_pct'] = home_display.apply(lambda x: f"{(x['fg3_made']/x['fg3_attempts']*100):.1f}%" if x['fg3_attempts'] > 0 else "-", axis=1)
+                        home_display['ft_pct'] = home_display.apply(lambda x: f"{(x['ft_made']/x['ft_attempts']*100):.1f}%" if x['ft_attempts'] > 0 else "-", axis=1)
+                        
+                        # 创建表头
+                        cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 0.8, 0.8, 0.5])
+                        headers = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', '投篮', '命中率', '罚球', '操作']
+                        for col, header in zip(cols, headers):
+                            col.markdown(f"**{header}**")
+                        
+                        st.markdown("---")
+                        
+                        # 显示主队数据，每行带删除按钮
+                        for _, row in home_display.iterrows():
+                            cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 0.8, 0.8, 0.5])
+                            
+                            cols[0].markdown(f"**{row['player_name']}**")
+                            cols[1].markdown(f"**{row['points']}**")
+                            cols[2].markdown(f"**{row['rebounds']}**")
+                            cols[3].markdown(f"**{row['assists']}**")
+                            cols[4].markdown(f"**{row['steals']}**")
+                            cols[5].markdown(f"**{row['blocks']}**")
+                            cols[6].markdown(f"**{row['turnovers']}**")
+                            cols[7].markdown(f"**{row['fouls']}**")
+                            
+                            # 投篮数据（两分/三分）
+                            cols[8].markdown(f"**{row['fg2']}** | **{row['fg3']}**")
+                            # 命中率
+                            cols[9].markdown(f"{row['fg2_pct']} | {row['fg3_pct']}")
+                            # 罚球
+                            cols[10].markdown(f"**{row['ft']}** ({row['ft_pct']})")
+                            
+                            # 删除按钮
+                            with cols[11]:
+                                if st.button("🗑️", key=f"del_home_{row['stat_id']}", help="删除这条数据"):
+                                    try:
+                                        supabase.table("player_stats").delete().eq("stat_id", row['stat_id']).execute()
+                                        
+                                        # 重新计算比赛总分和胜负
+                                        all_stats = supabase.table("player_stats").select("*").eq("match_id", match['match_id']).execute()
+                                        stats_list = all_stats.data
+                                        
+                                        home_total_new = 0
+                                        away_total_new = 0
+                                        for stat in stats_list:
+                                            if stat['is_home'] == 1:
+                                                home_total_new += stat['points']
+                                            else:
+                                                away_total_new += stat['points']
+                                        
+                                        # 更新比赛总分
+                                        match_update = {
+                                            "home_manual_score": home_total_new,
+                                            "away_manual_score": away_total_new
+                                        }
+                                        
+                                        if home_total_new > away_total_new:
+                                            match_update["home_win"] = 1
+                                            match_update["away_win"] = 0
+                                        elif away_total_new > home_total_new:
+                                            match_update["home_win"] = 0
+                                            match_update["away_win"] = 1
+                                        else:
+                                            match_update["home_win"] = 0
+                                            match_update["away_win"] = 0
+                                        
+                                        supabase.table("matches").update(match_update).eq("match_id", match['match_id']).execute()
+                                        
+                                        clear_cache()
+                                        st.success(f"✅ 已删除 {row['player_name']} 的数据")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ 删除失败：{str(e)}")
+                            
+                            st.markdown("---")
                     else:
                         st.info(f"{home_team_name} 暂无球员数据")
                     
                     st.markdown("---")
                     
-                    # 客队数据表格
+                    # ===== 客队数据表格（带出手数和命中率） =====
                     if not away_stats.empty and not players_df.empty:
                         st.subheader(f"✈️ {away_team_name}")
                         
-                        away_display = away_stats.merge(players_df, on='player_id')
-                        display_columns = []
-                        for col in ['player_name', 'points', 'rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls']:
-                            if col in away_display.columns:
-                                display_columns.append(col)
+                        # 合并球员名称
+                        away_display = away_stats.merge(players_df[['player_id', 'player_name']], on='player_id')
                         
-                        if display_columns:
-                            away_display = away_display[display_columns]
-                            column_names = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规']
-                            away_display.columns = column_names[:len(display_columns)]
-                            st.dataframe(away_display, use_container_width=True, hide_index=True)
+                        # 计算命中率和出手数
+                        away_display['fg2'] = away_display.apply(lambda x: f"{x['fg2_made']}/{x['fg2_attempts']}" if x['fg2_attempts'] > 0 else "0/0", axis=1)
+                        away_display['fg3'] = away_display.apply(lambda x: f"{x['fg3_made']}/{x['fg3_attempts']}" if x['fg3_attempts'] > 0 else "0/0", axis=1)
+                        away_display['ft'] = away_display.apply(lambda x: f"{x['ft_made']}/{x['ft_attempts']}" if x['ft_attempts'] > 0 else "0/0", axis=1)
+                        
+                        away_display['fg2_pct'] = away_display.apply(lambda x: f"{(x['fg2_made']/x['fg2_attempts']*100):.1f}%" if x['fg2_attempts'] > 0 else "-", axis=1)
+                        away_display['fg3_pct'] = away_display.apply(lambda x: f"{(x['fg3_made']/x['fg3_attempts']*100):.1f}%" if x['fg3_attempts'] > 0 else "-", axis=1)
+                        away_display['ft_pct'] = away_display.apply(lambda x: f"{(x['ft_made']/x['ft_attempts']*100):.1f}%" if x['ft_attempts'] > 0 else "-", axis=1)
+                        
+                        # 创建表头
+                        cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 0.8, 0.8, 0.5])
+                        headers = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', '投篮', '命中率', '罚球', '操作']
+                        for col, header in zip(cols, headers):
+                            col.markdown(f"**{header}**")
+                        
+                        st.markdown("---")
+                        
+                        # 显示客队数据，每行带删除按钮
+                        for _, row in away_display.iterrows():
+                            cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 0.8, 0.8, 0.5])
+                            
+                            cols[0].markdown(f"**{row['player_name']}**")
+                            cols[1].markdown(f"**{row['points']}**")
+                            cols[2].markdown(f"**{row['rebounds']}**")
+                            cols[3].markdown(f"**{row['assists']}**")
+                            cols[4].markdown(f"**{row['steals']}**")
+                            cols[5].markdown(f"**{row['blocks']}**")
+                            cols[6].markdown(f"**{row['turnovers']}**")
+                            cols[7].markdown(f"**{row['fouls']}**")
+                            
+                            # 投篮数据（两分/三分）
+                            cols[8].markdown(f"**{row['fg2']}** | **{row['fg3']}**")
+                            # 命中率
+                            cols[9].markdown(f"{row['fg2_pct']} | {row['fg3_pct']}")
+                            # 罚球
+                            cols[10].markdown(f"**{row['ft']}** ({row['ft_pct']})")
+                            
+                            # 删除按钮
+                            with cols[11]:
+                                if st.button("🗑️", key=f"del_away_{row['stat_id']}", help="删除这条数据"):
+                                    try:
+                                        supabase.table("player_stats").delete().eq("stat_id", row['stat_id']).execute()
+                                        
+                                        # 重新计算比赛总分和胜负
+                                        all_stats = supabase.table("player_stats").select("*").eq("match_id", match['match_id']).execute()
+                                        stats_list = all_stats.data
+                                        
+                                        home_total_new = 0
+                                        away_total_new = 0
+                                        for stat in stats_list:
+                                            if stat['is_home'] == 1:
+                                                home_total_new += stat['points']
+                                            else:
+                                                away_total_new += stat['points']
+                                        
+                                        # 更新比赛总分
+                                        match_update = {
+                                            "home_manual_score": home_total_new,
+                                            "away_manual_score": away_total_new
+                                        }
+                                        
+                                        if home_total_new > away_total_new:
+                                            match_update["home_win"] = 1
+                                            match_update["away_win"] = 0
+                                        elif away_total_new > home_total_new:
+                                            match_update["home_win"] = 0
+                                            match_update["away_win"] = 1
+                                        else:
+                                            match_update["home_win"] = 0
+                                            match_update["away_win"] = 0
+                                        
+                                        supabase.table("matches").update(match_update).eq("match_id", match['match_id']).execute()
+                                        
+                                        clear_cache()
+                                        st.success(f"✅ 已删除 {row['player_name']} 的数据")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ 删除失败：{str(e)}")
+                            
+                            st.markdown("---")
                     else:
                         st.info(f"{away_team_name} 暂无球员数据")
                     
@@ -798,6 +942,88 @@ elif menu == "⚙️ 管理后台":
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ 创建失败：{e}")
-
+        
+        st.divider()
+        st.subheader("现有比赛")
+        
+        # 获取所有比赛和统计数据
+        matches_df = get_matches()
+        stats_df = get_player_stats()
+        teams_df = get_teams()
+        
+        if not matches_df.empty:
+            game_type_display_map = {"5v5": "5v5全场", "4v4": "4v4半场抢分21", "3v3": "3v3半场抢分21"}
+            
+            for _, match in matches_df.iterrows():
+                # 获取队伍名称
+                home_team_name = "队伍1"
+                away_team_name = "队伍2"
+                
+                if pd.notna(match['home_team_id']) and match['home_team_id'] is not None:
+                    home_team = teams_df[teams_df['team_id'] == match['home_team_id']]
+                    if not home_team.empty:
+                        home_team_name = home_team.iloc[0]['team_name']
+                
+                if pd.notna(match['away_team_id']) and match['away_team_id'] is not None:
+                    away_team = teams_df[teams_df['team_id'] == match['away_team_id']]
+                    if not away_team.empty:
+                        away_team_name = away_team.iloc[0]['team_name']
+                
+                game_type_display = game_type_display_map.get(match['game_type'], match['game_type'])
+                
+                # 检查该比赛是否有球员数据
+                has_stats = False
+                if not stats_df.empty and 'match_id' in stats_df.columns:
+                    has_stats = len(stats_df[stats_df['match_id'] == match['match_id']]) > 0
+                
+                # 确定获胜方
+                winner = ""
+                if match['home_win'] == 1 and match['away_win'] == 1:
+                    winner = "平局"
+                elif match['home_win'] == 1:
+                    winner = f"{home_team_name} 获胜"
+                elif match['away_win'] == 1:
+                    winner = f"{away_team_name} 获胜"
+                
+                col1, col2, col3, col4, col5 = st.columns([2, 1.5, 2, 2, 1])
+                
+                with col1:
+                    st.write(f"**{match['match_date']}**")
+                
+                with col2:
+                    st.write(f"**{match['match_name']}**")
+                
+                with col3:
+                    st.write(f"{game_type_display}")
+                    if has_stats:
+                        st.caption("📊 有球员数据")
+                    else:
+                        st.caption("⚪ 无球员数据")
+                
+                with col4:
+                    score_text = f"{home_team_name} {match['home_manual_score']} : {match['away_manual_score']} {away_team_name}"
+                    st.write(score_text)
+                    if winner:
+                        st.caption(winner)
+                
+                with col5:
+                    # 删除按钮 - 只有没有球员数据的比赛才能删除
+                    if not has_stats:
+                        if st.button("🗑️", key=f"del_match_{match['match_id']}", help="删除比赛（无球员数据）"):
+                            try:
+                                supabase.table("matches").delete().eq("match_id", match['match_id']).execute()
+                                clear_cache()
+                                st.success(f"✅ 比赛已删除")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ 删除失败：{e}")
+                    else:
+                        st.button("🔒", key=f"locked_{match['match_id']}", help="该比赛有球员数据，无法删除", disabled=True)
+                
+                st.divider()
+            
+            st.caption(f"📊 总计 {len(matches_df)} 场比赛")
+        else:
+            st.info("暂无比赛")
 
 
