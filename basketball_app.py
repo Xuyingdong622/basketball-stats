@@ -448,8 +448,7 @@ elif menu == "📊 球员数据榜":
             # 显示表格，设置高度和宽度
             st.dataframe(
                 total_df,
-                use_container_width=True,
-                height=400
+                use_container_width=True
             )
             
             # 统计信息
@@ -1075,6 +1074,7 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"📊 总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
 
 
