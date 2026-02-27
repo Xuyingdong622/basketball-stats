@@ -473,118 +473,137 @@ elif menu == "📋 比赛记录":
     players_df = get_players()
     stats_df = get_player_stats()
     
-    game_type_display_map = {"5v5": "5v5全场", "4v4": "4v4半场抢分21", "3v3": "3v3半场抢分21"}
-    
-    for _, match in matches_df.iterrows():
-        # 获取队伍名称
-        home_team_name = "队伍1"
-        away_team_name = "队伍2"
+    if matches_df.empty:
+        st.info("暂无比赛记录")
+    else:
+        game_type_display_map = {"5v5": "5v5全场", "4v4": "4v4半场抢分21", "3v3": "3v3半场抢分21"}
         
-        if pd.notna(match['home_team_id']) and match['home_team_id'] is not None:
-            home_team = teams_df[teams_df['team_id'] == match['home_team_id']]
-            if not home_team.empty:
-                home_team_name = home_team.iloc[0]['team_name']
-        
-        if pd.notna(match['away_team_id']) and match['away_team_id'] is not None:
-            away_team = teams_df[teams_df['team_id'] == match['away_team_id']]
-            if not away_team.empty:
-                away_team_name = away_team.iloc[0]['team_name']
-        
-        game_type_display = game_type_display_map.get(match['game_type'], match['game_type'])
-        
-        # 获取本场比赛的球员数据
-        match_stats = stats_df[stats_df['match_id'] == match['match_id']].copy()
-        
-        # 计算两队总得分
-        home_total = 0
-        away_total = 0
-        home_players = []
-        away_players = []
-        
-        if not match_stats.empty:
-            home_stats = match_stats[match_stats['is_home'] == 1]
-            away_stats = match_stats[match_stats['is_home'] == 0]
+        for _, match in matches_df.iterrows():
+            # 获取队伍名称
+            home_team_name = "队伍1"
+            away_team_name = "队伍2"
             
-            home_players = home_stats.merge(players_df, on='player_id')['player_name'].tolist()
-            away_players = away_stats.merge(players_df, on='player_id')['player_name'].tolist()
+            if pd.notna(match['home_team_id']) and match['home_team_id'] is not None:
+                home_team = teams_df[teams_df['team_id'] == match['home_team_id']]
+                if not home_team.empty:
+                    home_team_name = home_team.iloc[0]['team_name']
             
-            home_total = home_stats['points'].sum() if not home_stats.empty else 0
-            away_total = away_stats['points'].sum() if not away_stats.empty else 0
-        
-        # 确定获胜方
-        winner = ""
-        if home_total > away_total:
-            winner = f"🏆 {home_team_name} 获胜"
-        elif away_total > home_total:
-            winner = f"🏆 {away_team_name} 获胜"
-        elif home_total > 0 and home_total == away_total:
-            winner = "🤝 平局"
-        
-        # 创建预览文本
-        preview_text = f"📅 {match['match_date']} {match['match_name']} [{game_type_display}]"
-        preview_text += f"\n{home_team_name} {home_total} : {away_total} {away_team_name}"
-        if winner:
-            preview_text += f"  {winner}"
-        
-        # 添加球员预览
-        if home_players or away_players:
-            preview_text += "\n\n"
-            if home_players:
-                preview_text += f"🏠 {home_team_name}: {', '.join(home_players[:3])}"
-                if len(home_players) > 3:
-                    preview_text += f" 等{len(home_players)}人"
-            preview_text += "\n"
-            if away_players:
-                preview_text += f"✈️ {away_team_name}: {', '.join(away_players[:3])}"
-                if len(away_players) > 3:
-                    preview_text += f" 等{len(away_players)}人"
-        
-        with st.expander(preview_text):
+            if pd.notna(match['away_team_id']) and match['away_team_id'] is not None:
+                away_team = teams_df[teams_df['team_id'] == match['away_team_id']]
+                if not away_team.empty:
+                    away_team_name = away_team.iloc[0]['team_name']
+            
+            game_type_display = game_type_display_map.get(match['game_type'], match['game_type'])
+            
+            # 安全地获取本场比赛的球员数据
+            match_stats = pd.DataFrame()
+            if not stats_df.empty and 'match_id' in stats_df.columns:
+                match_stats = stats_df[stats_df['match_id'] == match['match_id']].copy()
+            
+            # 计算两队总得分
+            home_total = 0
+            away_total = 0
+            home_players = []
+            away_players = []
+            
             if not match_stats.empty:
-                # 显示比分
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric(f"{home_team_name} 总得分", home_total)
-                with col2:
-                    st.metric(f"{away_team_name} 总得分", away_total)
-                with col3:
-                    st.metric("分差", abs(home_total - away_total))
+                home_stats = match_stats[match_stats['is_home'] == 1]
+                away_stats = match_stats[match_stats['is_home'] == 0]
                 
-                st.markdown("---")
+                if not home_stats.empty and not players_df.empty and 'player_id' in home_stats.columns:
+                    home_players = home_stats.merge(players_df, on='player_id')['player_name'].tolist()
+                    home_total = home_stats['points'].sum() if 'points' in home_stats.columns else 0
                 
-                # 分离主客队数据
-                home_stats = match_stats[match_stats['is_home'] == 1].copy()
-                away_stats = match_stats[match_stats['is_home'] == 0].copy()
-                
-                # 主队数据表格
-                if not home_stats.empty:
-                    st.subheader(f"🏠 {home_team_name}")
+                if not away_stats.empty and not players_df.empty and 'player_id' in away_stats.columns:
+                    away_players = away_stats.merge(players_df, on='player_id')['player_name'].tolist()
+                    away_total = away_stats['points'].sum() if 'points' in away_stats.columns else 0
+            
+            # 确定获胜方
+            winner = ""
+            if home_total > away_total:
+                winner = f"🏆 {home_team_name} 获胜"
+            elif away_total > home_total:
+                winner = f"🏆 {away_team_name} 获胜"
+            elif home_total > 0 and home_total == away_total:
+                winner = "🤝 平局"
+            
+            # 创建预览文本
+            preview_text = f"📅 {match['match_date']} {match['match_name']} [{game_type_display}]"
+            preview_text += f"\n{home_team_name} {home_total} : {away_total} {away_team_name}"
+            if winner:
+                preview_text += f"  {winner}"
+            
+            # 添加球员预览
+            if home_players or away_players:
+                preview_text += "\n\n"
+                if home_players:
+                    preview_text += f"🏠 {home_team_name}: {', '.join(home_players[:3])}"
+                    if len(home_players) > 3:
+                        preview_text += f" 等{len(home_players)}人"
+                preview_text += "\n"
+                if away_players:
+                    preview_text += f"✈️ {away_team_name}: {', '.join(away_players[:3])}"
+                    if len(away_players) > 3:
+                        preview_text += f" 等{len(away_players)}人"
+            
+            with st.expander(preview_text):
+                if not match_stats.empty:
+                    # 显示比分
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric(f"{home_team_name} 总得分", home_total)
+                    with col2:
+                        st.metric(f"{away_team_name} 总得分", away_total)
+                    with col3:
+                        st.metric("分差", abs(home_total - away_total))
                     
-                    home_display = home_stats.merge(players_df, on='player_id')
-                    home_display = home_display[['player_name', 'points', 'rebounds', 'assists',
-                                                  'steals', 'blocks', 'turnovers', 'fouls']]
-                    home_display.columns = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规']
-                    st.dataframe(home_display, use_container_width=True, hide_index=True)
-                else:
-                    st.info(f"{home_team_name} 暂无球员数据")
-                
-                st.markdown("---")
-                
-                # 客队数据表格
-                if not away_stats.empty:
-                    st.subheader(f"✈️ {away_team_name}")
+                    st.markdown("---")
                     
-                    away_display = away_stats.merge(players_df, on='player_id')
-                    away_display = away_display[['player_name', 'points', 'rebounds', 'assists',
-                                                  'steals', 'blocks', 'turnovers', 'fouls']]
-                    away_display.columns = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规']
-                    st.dataframe(away_display, use_container_width=True, hide_index=True)
+                    # 分离主客队数据
+                    home_stats = match_stats[match_stats['is_home'] == 1].copy() if 'is_home' in match_stats.columns else pd.DataFrame()
+                    away_stats = match_stats[match_stats['is_home'] == 0].copy() if 'is_home' in match_stats.columns else pd.DataFrame()
+                    
+                    # 主队数据表格
+                    if not home_stats.empty and not players_df.empty:
+                        st.subheader(f"🏠 {home_team_name}")
+                        
+                        home_display = home_stats.merge(players_df, on='player_id')
+                        display_columns = []
+                        for col in ['player_name', 'points', 'rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls']:
+                            if col in home_display.columns:
+                                display_columns.append(col)
+                        
+                        if display_columns:
+                            home_display = home_display[display_columns]
+                            column_names = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规']
+                            home_display.columns = column_names[:len(display_columns)]
+                            st.dataframe(home_display, use_container_width=True, hide_index=True)
+                    else:
+                        st.info(f"{home_team_name} 暂无球员数据")
+                    
+                    st.markdown("---")
+                    
+                    # 客队数据表格
+                    if not away_stats.empty and not players_df.empty:
+                        st.subheader(f"✈️ {away_team_name}")
+                        
+                        away_display = away_stats.merge(players_df, on='player_id')
+                        display_columns = []
+                        for col in ['player_name', 'points', 'rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls']:
+                            if col in away_display.columns:
+                                display_columns.append(col)
+                        
+                        if display_columns:
+                            away_display = away_display[display_columns]
+                            column_names = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规']
+                            away_display.columns = column_names[:len(display_columns)]
+                            st.dataframe(away_display, use_container_width=True, hide_index=True)
+                    else:
+                        st.info(f"{away_team_name} 暂无球员数据")
+                    
+                    st.caption(f"本场共 {len(match_stats)} 名球员")
                 else:
-                    st.info(f"{away_team_name} 暂无球员数据")
-                
-                st.caption(f"本场共 {len(match_stats)} 名球员")
-            else:
-                st.info("暂无球员数据")
+                    st.info("暂无球员数据")
 
 # ==================== 管理后台 ====================
 elif menu == "⚙️ 管理后台":
@@ -774,4 +793,5 @@ elif menu == "⚙️ 管理后台":
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ 创建失败：{e}")
+
 
