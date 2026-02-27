@@ -367,7 +367,7 @@ elif menu == "📊 球员数据榜":
             player_stats['wins'] = player_stats['wins'].fillna(0).astype(int)
             player_stats['win_rate'] = (player_stats['wins'] / player_stats['games'] * 100).round(1)
             
-            # ===== 场均数据表格（包含投篮出手数和命中数） =====
+      # ===== 场均数据表格（固定球员姓名列） =====
             st.subheader("📈 场均数据")
             
             # 创建场均数据表格
@@ -400,11 +400,19 @@ elif menu == "📊 球员数据榜":
                         '两分%', '三分%', '罚球%']:
                 avg_df[col] = avg_df[col].round(1)
             
-            st.dataframe(avg_df, use_container_width=True, hide_index=True)
+            # 设置球员列为索引，这样在水平滚动时会固定
+            avg_df = avg_df.set_index('球员')
+            
+            # 显示表格，设置高度和宽度
+            st.dataframe(
+                avg_df,
+                use_container_width=True,
+                height=400
+            )
             
             st.divider()
             
-            # ===== 总数数据表格 =====
+            # ===== 总数数据表格（固定球员姓名列） =====
             st.subheader("📊 总数数据")
             
             # 创建总数数据表格
@@ -435,7 +443,15 @@ elif menu == "📊 球员数据榜":
             for col in ['胜率%', '两分%', '三分%', '罚球%']:
                 total_df[col] = total_df[col].round(1)
             
-            st.dataframe(total_df, use_container_width=True, hide_index=True)
+            # 设置球员列为索引，这样在水平滚动时会固定
+            total_df = total_df.set_index('球员')
+            
+            # 显示表格，设置高度和宽度
+            st.dataframe(
+                total_df,
+                use_container_width=True,
+                height=400
+            )
             
             # 统计信息
             st.caption(f"📊 总计 {len(player_stats)} 名球员，共 {player_stats['games'].sum().astype(int)} 场比赛")
@@ -1060,6 +1076,7 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"📊 总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
 
 
