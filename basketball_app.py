@@ -339,10 +339,13 @@ elif menu == "📊 球员数据榜":
             
             player_stats = player_stats.reset_index()
             
-            # 计算命中率
+            # 计算命中率（保留1位小数）
             player_stats['fg2_pct'] = (player_stats['total_fg2_made'] / player_stats['total_fg2_att'] * 100).round(1)
             player_stats['fg3_pct'] = (player_stats['total_fg3_made'] / player_stats['total_fg3_att'] * 100).round(1)
             player_stats['ft_pct'] = (player_stats['total_ft_made'] / player_stats['total_ft_att'] * 100).round(1)
+            
+            # 填充空值为0
+            player_stats = player_stats.fillna(0)
             
             # 计算胜率
             match_results = merged_df[['match_id', 'player_id', 'is_home', 'home_win', 'away_win']].drop_duplicates()
@@ -353,50 +356,73 @@ elif menu == "📊 球员数据榜":
             wins.columns = ['player_id', 'wins']
             
             player_stats = player_stats.merge(wins, on='player_id', how='left')
-            player_stats['wins'] = player_stats['wins'].fillna(0)
+            player_stats['wins'] = player_stats['wins'].fillna(0).astype(int)
             player_stats['win_rate'] = (player_stats['wins'] / player_stats['games'] * 100).round(1)
             
-            # ===== 场均数据表格（球员姓名在第一列） =====
+            # ===== 场均数据表格（保留1位小数） =====
             st.subheader("📈 场均数据")
-            avg_display = player_stats[['player_name', 'games', 'wins', 'win_rate',
-                                        'avg_points', 'avg_rebounds', 'avg_assists',
-                                        'avg_steals', 'avg_blocks', 'avg_turnovers', 'avg_fouls',
-                                        'avg_points', 'avg_rebounds', 'avg_assists',
-                                        'fg2_pct', 'fg3_pct', 'ft_pct']].copy()
             
-            avg_display.columns = ['球员', '场次', '胜场', '胜率%',
-                                   '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规',
-                                   '场均得分', '场均篮板', '场均助攻',
-                                   '两分%', '三分%', '罚球%']
+            # 创建场均数据表格
+            avg_df = pd.DataFrame({
+                '球员': player_stats['player_name'],
+                '场次': player_stats['games'].astype(int),
+                '胜场': player_stats['wins'].astype(int),
+                '胜率%': player_stats['win_rate'],
+                '得分': player_stats['avg_points'],
+                '篮板': player_stats['avg_rebounds'],
+                '助攻': player_stats['avg_assists'],
+                '抢断': player_stats['avg_steals'],
+                '盖帽': player_stats['avg_blocks'],
+                '失误': player_stats['avg_turnovers'],
+                '犯规': player_stats['avg_fouls'],
+                '两分%': player_stats['fg2_pct'],
+                '三分%': player_stats['fg3_pct'],
+                '罚球%': player_stats['ft_pct']
+            })
             
-            # 设置球员列为索引，这样在滑动时固定
-            avg_display_styled = avg_display.style.set_properties(**{'text-align': 'center'})
-            st.dataframe(avg_display_styled, use_container_width=True)
+            # 设置所有数值列保留1位小数
+            for col in ['胜率%', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', '两分%', '三分%', '罚球%']:
+                avg_df[col] = avg_df[col].round(1)
+            
+            st.dataframe(avg_df, use_container_width=True, hide_index=True)
             
             st.divider()
             
-            # ===== 总数数据表格（球员姓名在第一列） =====
+            # ===== 总数数据表格 =====
             st.subheader("📊 总数数据")
-            total_display = player_stats[['player_name', 'games', 'wins', 'win_rate',
-                                          'total_points', 'total_rebounds', 'total_assists',
-                                          'total_steals', 'total_blocks', 'total_turnovers', 'total_fouls',
-                                          'total_fg2_made', 'total_fg2_att',
-                                          'total_fg3_made', 'total_fg3_att',
-                                          'total_ft_made', 'total_ft_att',
-                                          'fg2_pct', 'fg3_pct', 'ft_pct']].copy()
             
-            total_display.columns = ['球员', '场次', '胜场', '胜率%',
-                                     '总得分', '总篮板', '总助攻', '总抢断', '总盖帽',
-                                     '总失误', '总犯规',
-                                     '两分中', '两分投', '三分中', '三分投',
-                                     '罚球中', '罚球投', '两分%', '三分%', '罚球%']
+            # 创建总数数据表格
+            total_df = pd.DataFrame({
+                '球员': player_stats['player_name'],
+                '场次': player_stats['games'].astype(int),
+                '胜场': player_stats['wins'].astype(int),
+                '胜率%': player_stats['win_rate'],
+                '总得分': player_stats['total_points'].astype(int),
+                '总篮板': player_stats['total_rebounds'].astype(int),
+                '总助攻': player_stats['total_assists'].astype(int),
+                '总抢断': player_stats['total_steals'].astype(int),
+                '总盖帽': player_stats['total_blocks'].astype(int),
+                '总失误': player_stats['total_turnovers'].astype(int),
+                '总犯规': player_stats['total_fouls'].astype(int),
+                '两分中': player_stats['total_fg2_made'].astype(int),
+                '两分投': player_stats['total_fg2_att'].astype(int),
+                '三分中': player_stats['total_fg3_made'].astype(int),
+                '三分投': player_stats['total_fg3_att'].astype(int),
+                '罚球中': player_stats['total_ft_made'].astype(int),
+                '罚球投': player_stats['total_ft_att'].astype(int),
+                '两分%': player_stats['fg2_pct'],
+                '三分%': player_stats['fg3_pct'],
+                '罚球%': player_stats['ft_pct']
+            })
             
-            # 设置球员列为索引，这样在滑动时固定
-            total_display_styled = total_display.style.set_properties(**{'text-align': 'center'})
-            st.dataframe(total_display_styled, use_container_width=True)
+            # 设置命中率保留1位小数
+            for col in ['胜率%', '两分%', '三分%', '罚球%']:
+                total_df[col] = total_df[col].round(1)
+            
+            st.dataframe(total_df, use_container_width=True, hide_index=True)
             
             # 统计信息
-            st.caption(f"📊 总计 {len(player_stats)} 名球员，共 {player_stats['games'].sum()} 场比赛")
+            st.caption(f"📊 总计 {len(player_stats)} 名球员，共 {player_stats['games'].sum().astype(int)} 场比赛")
             
             # ===== 各项数据王 =====
             st.subheader("🏆 场均数据王")
@@ -472,7 +498,7 @@ elif menu == "📊 球员数据榜":
                 
                 # 胜率王
                 top_winner = player_stats.loc[player_stats['win_rate'].idxmax()]
-                st.info(f"🏆 胜率王：**{top_winner['player_name']}** {top_winner['win_rate']}% ({top_winner['wins']}胜/{top_winner['games']}场)")
+                st.info(f"🏆 胜率王：**{top_winner['player_name']}** {top_winner['win_rate']:.1f}% ({int(top_winner['wins'])}胜/{int(top_winner['games'])}场)")
 # ==================== 比赛记录 ====================
 elif menu == "📋 比赛记录":
     st.header("📋 比赛记录")
@@ -1018,6 +1044,7 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"📊 总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
 
 
