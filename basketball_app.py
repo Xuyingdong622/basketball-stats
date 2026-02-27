@@ -406,14 +406,13 @@ elif menu == "📊 球员数据榜":
             # 显示表格，设置高度和宽度
             st.dataframe(
                 avg_df,
-                use_container_width=True,
-                height=400
+                use_container_width=True
             )
             
             st.divider()
             
             # ===== 总数数据表格（固定球员姓名列） =====
-            st.subheader("📊 总数数据")
+            st.subheader("📊 总数据")
             
             # 创建总数数据表格
             total_df = pd.DataFrame({
@@ -1076,6 +1075,7 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"📊 总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
 
 
