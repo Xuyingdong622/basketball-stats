@@ -677,7 +677,10 @@ elif menu == "⚙️ 管理后台":
         
         if not players_df.empty:
             for _, row in players_df.iterrows():
-                stats_count = len(stats_df[stats_df['player_id'] == row['player_id']])
+                # 安全地获取统计数据数量
+                stats_count = 0
+                if not stats_df.empty and 'player_id' in stats_df.columns:
+                    stats_count = len(stats_df[stats_df['player_id'] == row['player_id']])
                 
                 col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
                 
@@ -771,3 +774,4 @@ elif menu == "⚙️ 管理后台":
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ 创建失败：{e}")
+
