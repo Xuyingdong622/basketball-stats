@@ -568,25 +568,21 @@ elif menu == "📋 比赛记录":
                     home_stats = match_stats[match_stats['is_home'] == 1].copy() if 'is_home' in match_stats.columns else pd.DataFrame()
                     away_stats = match_stats[match_stats['is_home'] == 0].copy() if 'is_home' in match_stats.columns else pd.DataFrame()
                     
-                    # ===== 主队数据表格（带出手数和命中率） =====
+                    # ===== 主队数据表格（只显示出手数，不显示命中率） =====
                     if not home_stats.empty and not players_df.empty:
                         st.subheader(f"🏠 {home_team_name}")
                         
                         # 合并球员名称
                         home_display = home_stats.merge(players_df[['player_id', 'player_name']], on='player_id')
                         
-                        # 计算命中率和出手数
+                        # 计算出手数（只显示命中/出手，不显示命中率）
                         home_display['fg2'] = home_display.apply(lambda x: f"{x['fg2_made']}/{x['fg2_attempts']}" if x['fg2_attempts'] > 0 else "0/0", axis=1)
                         home_display['fg3'] = home_display.apply(lambda x: f"{x['fg3_made']}/{x['fg3_attempts']}" if x['fg3_attempts'] > 0 else "0/0", axis=1)
                         home_display['ft'] = home_display.apply(lambda x: f"{x['ft_made']}/{x['ft_attempts']}" if x['ft_attempts'] > 0 else "0/0", axis=1)
                         
-                        home_display['fg2_pct'] = home_display.apply(lambda x: f"{(x['fg2_made']/x['fg2_attempts']*100):.1f}%" if x['fg2_attempts'] > 0 else "-", axis=1)
-                        home_display['fg3_pct'] = home_display.apply(lambda x: f"{(x['fg3_made']/x['fg3_attempts']*100):.1f}%" if x['fg3_attempts'] > 0 else "-", axis=1)
-                        home_display['ft_pct'] = home_display.apply(lambda x: f"{(x['ft_made']/x['ft_attempts']*100):.1f}%" if x['ft_attempts'] > 0 else "-", axis=1)
-                        
                         # 创建表头
-                        cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 0.8, 0.8, 0.5])
-                        headers = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', '投篮', '命中率', '罚球', '操作']
+                        cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 1, 0.5])
+                        headers = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', '两分/三分', '罚球', '操作']
                         for col, header in zip(cols, headers):
                             col.markdown(f"**{header}**")
                         
@@ -594,7 +590,7 @@ elif menu == "📋 比赛记录":
                         
                         # 显示主队数据，每行带删除按钮
                         for _, row in home_display.iterrows():
-                            cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 0.8, 0.8, 0.5])
+                            cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 1, 0.5])
                             
                             cols[0].markdown(f"**{row['player_name']}**")
                             cols[1].markdown(f"**{row['points']}**")
@@ -607,13 +603,11 @@ elif menu == "📋 比赛记录":
                             
                             # 投篮数据（两分/三分）
                             cols[8].markdown(f"**{row['fg2']}** | **{row['fg3']}**")
-                            # 命中率
-                            cols[9].markdown(f"{row['fg2_pct']} | {row['fg3_pct']}")
                             # 罚球
-                            cols[10].markdown(f"**{row['ft']}** ({row['ft_pct']})")
+                            cols[9].markdown(f"**{row['ft']}**")
                             
                             # 删除按钮
-                            with cols[11]:
+                            with cols[10]:
                                 if st.button("🗑️", key=f"del_home_{row['stat_id']}", help="删除这条数据"):
                                     try:
                                         supabase.table("player_stats").delete().eq("stat_id", row['stat_id']).execute()
@@ -660,25 +654,21 @@ elif menu == "📋 比赛记录":
                     
                     st.markdown("---")
                     
-                    # ===== 客队数据表格（带出手数和命中率） =====
+                    # ===== 客队数据表格（只显示出手数，不显示命中率） =====
                     if not away_stats.empty and not players_df.empty:
                         st.subheader(f"✈️ {away_team_name}")
                         
                         # 合并球员名称
                         away_display = away_stats.merge(players_df[['player_id', 'player_name']], on='player_id')
                         
-                        # 计算命中率和出手数
+                        # 计算出手数（只显示命中/出手，不显示命中率）
                         away_display['fg2'] = away_display.apply(lambda x: f"{x['fg2_made']}/{x['fg2_attempts']}" if x['fg2_attempts'] > 0 else "0/0", axis=1)
                         away_display['fg3'] = away_display.apply(lambda x: f"{x['fg3_made']}/{x['fg3_attempts']}" if x['fg3_attempts'] > 0 else "0/0", axis=1)
                         away_display['ft'] = away_display.apply(lambda x: f"{x['ft_made']}/{x['ft_attempts']}" if x['ft_attempts'] > 0 else "0/0", axis=1)
                         
-                        away_display['fg2_pct'] = away_display.apply(lambda x: f"{(x['fg2_made']/x['fg2_attempts']*100):.1f}%" if x['fg2_attempts'] > 0 else "-", axis=1)
-                        away_display['fg3_pct'] = away_display.apply(lambda x: f"{(x['fg3_made']/x['fg3_attempts']*100):.1f}%" if x['fg3_attempts'] > 0 else "-", axis=1)
-                        away_display['ft_pct'] = away_display.apply(lambda x: f"{(x['ft_made']/x['ft_attempts']*100):.1f}%" if x['ft_attempts'] > 0 else "-", axis=1)
-                        
                         # 创建表头
-                        cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 0.8, 0.8, 0.5])
-                        headers = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', '投篮', '命中率', '罚球', '操作']
+                        cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 1, 0.5])
+                        headers = ['球员', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', '两分/三分', '罚球', '操作']
                         for col, header in zip(cols, headers):
                             col.markdown(f"**{header}**")
                         
@@ -686,7 +676,7 @@ elif menu == "📋 比赛记录":
                         
                         # 显示客队数据，每行带删除按钮
                         for _, row in away_display.iterrows():
-                            cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 0.8, 0.8, 0.5])
+                            cols = st.columns([1.5, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2, 1, 0.5])
                             
                             cols[0].markdown(f"**{row['player_name']}**")
                             cols[1].markdown(f"**{row['points']}**")
@@ -699,13 +689,11 @@ elif menu == "📋 比赛记录":
                             
                             # 投篮数据（两分/三分）
                             cols[8].markdown(f"**{row['fg2']}** | **{row['fg3']}**")
-                            # 命中率
-                            cols[9].markdown(f"{row['fg2_pct']} | {row['fg3_pct']}")
                             # 罚球
-                            cols[10].markdown(f"**{row['ft']}** ({row['ft_pct']})")
+                            cols[9].markdown(f"**{row['ft']}**")
                             
                             # 删除按钮
-                            with cols[11]:
+                            with cols[10]:
                                 if st.button("🗑️", key=f"del_away_{row['stat_id']}", help="删除这条数据"):
                                     try:
                                         supabase.table("player_stats").delete().eq("stat_id", row['stat_id']).execute()
@@ -1025,5 +1013,6 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"📊 总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
 
