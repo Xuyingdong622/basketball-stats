@@ -339,6 +339,14 @@ elif menu == "📊 球员数据榜":
             
             player_stats = player_stats.reset_index()
             
+            # 计算场均出手数和命中数
+            player_stats['avg_fg2_made'] = (player_stats['total_fg2_made'] / player_stats['games']).round(1)
+            player_stats['avg_fg2_att'] = (player_stats['total_fg2_att'] / player_stats['games']).round(1)
+            player_stats['avg_fg3_made'] = (player_stats['total_fg3_made'] / player_stats['games']).round(1)
+            player_stats['avg_fg3_att'] = (player_stats['total_fg3_att'] / player_stats['games']).round(1)
+            player_stats['avg_ft_made'] = (player_stats['total_ft_made'] / player_stats['games']).round(1)
+            player_stats['avg_ft_att'] = (player_stats['total_ft_att'] / player_stats['games']).round(1)
+            
             # 计算命中率（保留1位小数）
             player_stats['fg2_pct'] = (player_stats['total_fg2_made'] / player_stats['total_fg2_att'] * 100).round(1)
             player_stats['fg3_pct'] = (player_stats['total_fg3_made'] / player_stats['total_fg3_att'] * 100).round(1)
@@ -359,7 +367,7 @@ elif menu == "📊 球员数据榜":
             player_stats['wins'] = player_stats['wins'].fillna(0).astype(int)
             player_stats['win_rate'] = (player_stats['wins'] / player_stats['games'] * 100).round(1)
             
-            # ===== 场均数据表格（保留1位小数） =====
+            # ===== 场均数据表格（包含投篮出手数和命中数） =====
             st.subheader("📈 场均数据")
             
             # 创建场均数据表格
@@ -375,13 +383,21 @@ elif menu == "📊 球员数据榜":
                 '盖帽': player_stats['avg_blocks'],
                 '失误': player_stats['avg_turnovers'],
                 '犯规': player_stats['avg_fouls'],
+                '两分中': player_stats['avg_fg2_made'],
+                '两分投': player_stats['avg_fg2_att'],
+                '三分中': player_stats['avg_fg3_made'],
+                '三分投': player_stats['avg_fg3_att'],
+                '罚球中': player_stats['avg_ft_made'],
+                '罚球投': player_stats['avg_ft_att'],
                 '两分%': player_stats['fg2_pct'],
                 '三分%': player_stats['fg3_pct'],
                 '罚球%': player_stats['ft_pct']
             })
             
             # 设置所有数值列保留1位小数
-            for col in ['胜率%', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', '两分%', '三分%', '罚球%']:
+            for col in ['胜率%', '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规', 
+                        '两分中', '两分投', '三分中', '三分投', '罚球中', '罚球投', 
+                        '两分%', '三分%', '罚球%']:
                 avg_df[col] = avg_df[col].round(1)
             
             st.dataframe(avg_df, use_container_width=True, hide_index=True)
@@ -1044,6 +1060,7 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"📊 总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
 
 
