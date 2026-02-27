@@ -356,22 +356,26 @@ elif menu == "📊 球员数据榜":
             player_stats['wins'] = player_stats['wins'].fillna(0)
             player_stats['win_rate'] = (player_stats['wins'] / player_stats['games'] * 100).round(1)
             
-            # 场均数据表格
+            # ===== 场均数据表格（球员姓名在第一列） =====
             st.subheader("📈 场均数据")
             avg_display = player_stats[['player_name', 'games', 'wins', 'win_rate',
                                         'avg_points', 'avg_rebounds', 'avg_assists',
                                         'avg_steals', 'avg_blocks', 'avg_turnovers', 'avg_fouls',
+                                        'avg_points', 'avg_rebounds', 'avg_assists',
                                         'fg2_pct', 'fg3_pct', 'ft_pct']].copy()
             
             avg_display.columns = ['球员', '场次', '胜场', '胜率%',
                                    '得分', '篮板', '助攻', '抢断', '盖帽', '失误', '犯规',
+                                   '场均得分', '场均篮板', '场均助攻',
                                    '两分%', '三分%', '罚球%']
             
-            st.dataframe(avg_display, use_container_width=True)
+            # 设置球员列为索引，这样在滑动时固定
+            avg_display_styled = avg_display.style.set_properties(**{'text-align': 'center'})
+            st.dataframe(avg_display_styled, use_container_width=True)
             
             st.divider()
             
-            # 总数数据表格
+            # ===== 总数数据表格（球员姓名在第一列） =====
             st.subheader("📊 总数数据")
             total_display = player_stats[['player_name', 'games', 'wins', 'win_rate',
                                           'total_points', 'total_rebounds', 'total_assists',
@@ -387,12 +391,14 @@ elif menu == "📊 球员数据榜":
                                      '两分中', '两分投', '三分中', '三分投',
                                      '罚球中', '罚球投', '两分%', '三分%', '罚球%']
             
-            st.dataframe(total_display, use_container_width=True)
+            # 设置球员列为索引，这样在滑动时固定
+            total_display_styled = total_display.style.set_properties(**{'text-align': 'center'})
+            st.dataframe(total_display_styled, use_container_width=True)
             
             # 统计信息
             st.caption(f"📊 总计 {len(player_stats)} 名球员，共 {player_stats['games'].sum()} 场比赛")
             
-            # 各项数据王
+            # ===== 各项数据王 =====
             st.subheader("🏆 场均数据王")
             
             if len(player_stats) > 0:
@@ -467,7 +473,6 @@ elif menu == "📊 球员数据榜":
                 # 胜率王
                 top_winner = player_stats.loc[player_stats['win_rate'].idxmax()]
                 st.info(f"🏆 胜率王：**{top_winner['player_name']}** {top_winner['win_rate']}% ({top_winner['wins']}胜/{top_winner['games']}场)")
-
 # ==================== 比赛记录 ====================
 elif menu == "📋 比赛记录":
     st.header("📋 比赛记录")
@@ -1013,6 +1018,7 @@ elif menu == "⚙️ 管理后台":
             st.caption(f"📊 总计 {len(matches_df)} 场比赛")
         else:
             st.info("暂无比赛")
+
 
 
 
